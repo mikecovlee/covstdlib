@@ -4,7 +4,8 @@ TEST_UNIT := \
 	covlist \
 	covstdlib \
 	covswitcher \
-	covtuple
+	covtuple \
+	copyFile
 
 CXXFLAGS += -std=c++11 -frtti -fexceptions -fPIC --pie -O2
 
@@ -21,6 +22,9 @@ covswitcher: $(HEADER) Testcovswitcher.cpp
 
 covtuple: $(HEADER) Testcovtuple.cpp
 	$(CXX) $(CXXFLAGS) -o $@ Testcovtuple.cpp
+
+copyFile: $(HEADER) TestcopyFile.cpp
+	$(CXX) $(CXXFLAGS) -o $@ TestcopyFile.cpp
 
 
 

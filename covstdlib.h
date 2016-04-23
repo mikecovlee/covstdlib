@@ -89,22 +89,38 @@ inline int cov::strlen(const char *str)
 // 文件复制函数
 inline int cov::copyFile(const char *source, const char *target)
 {
-	const int buff_size = 256;
-	FILE *in_file, *out_file;
-	char data[buff_size];
-	size_t bytes_in, bytes_out;
-	if ((in_file = fopen(source, "rb")) == NULL)
-		return 1;
-	if ((out_file = fopen(target, "wb")) == NULL)
-		return 2;
-	while ((bytes_in = fread(data, 1, buff_size, in_file)) > 0) {
-		bytes_out = fwrite(data, 1, bytes_in, out_file);
-		if (bytes_in != bytes_out)
-			return 3;
-	}
-	fclose(in_file);
-	fclose(out_file);
-	return 0;
+	static const int buff_size = 256;
+
+    int retval = 0;
+    FILE *in = nullptr;
+    FILE *out = nullptr;
+    try {
+        if ((in = fopen(source, "rb")) == nullptr) {
+            throw 1;
+        }
+        if ((out = fopen(target, "wb")) == nullptr) {
+            throw 2;
+        }
+
+        char data[buff_size] = {0};
+        size_t n = 0;
+
+        while ((n = fread(data, 1, buff_size, in)) > 0) {
+            if (fwrite(data, 1, n, out) != n) {
+                throw 3;
+            }
+        }
+    } catch (int e) {
+        retval = e;
+    }
+
+    if (in) {
+        fclose(in);
+    }
+    if (out) {
+        fclose(out);
+    }
+	return retval;
 }
 
 namespace cov {
