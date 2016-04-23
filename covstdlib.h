@@ -17,7 +17,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // Copyright (C) 2016 Mike Covariant Lee(李登淳)
-// Library Version:1.16.40
+// Library Version:1.16.41
 
 // Macro Definitions:
 // __HINT__ Default definition,prompt some errors
@@ -476,7 +476,7 @@ public:
 	}
 	bool empty() const
 	{
-		return mFront.forward()->usable();
+		return !mFront.forward()->usable();
 	}
 	void clear()
 	{
