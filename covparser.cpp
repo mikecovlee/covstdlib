@@ -481,13 +481,9 @@ int main()
 		if (line.find('=') != std::string::npos)
 			Parser::Variable::inferVar(line.substr(0, line.find('=')), line.substr(line.find('=') + 1));
 		else {
-			try {
-				answer=Parser::Expression::compute(line);
-				Parser::Variable::addVar < Parser::Variable::Number > ("ans",answer);
-				std::cout << "Answer:" << answer << std::endl;
-			} catch(const char* str) {
-				printf(str);
-			}
+			answer=Parser::Expression::compute(line);
+			Parser::Variable::addVar < Parser::Variable::Number > ("ans",answer);
+			std::cout << "Answer:" << answer << std::endl;
 		}
 	}
 	return 0;
