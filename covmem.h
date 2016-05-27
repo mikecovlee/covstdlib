@@ -229,6 +229,7 @@ namespace cov {
 		{
 			while(mCollector.recycleStack.size()>allocator_policy::max_recycle_count) {
 				mCollector.recycleStack.back()->deallocate();
+				delete mCollector.recycleStack.back();
 				mCollector.recycleStack.pop_back();
 			}
 		}
