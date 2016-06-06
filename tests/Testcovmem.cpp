@@ -1,5 +1,6 @@
 #include "covstdlib.h"
 #include <iostream>
+#include <cstdio>
 #include <string>
 #include <ctime>
 int main()

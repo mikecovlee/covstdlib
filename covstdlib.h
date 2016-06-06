@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // Covariant C++ Library
 
@@ -16,28 +16,15 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // Copyright (C) 2016 Mike Covariant Lee(李登淳)
-// Library Version: 1.16.61
-
-// Macro Definitions:
-// __HINT__ Default definition,prompt some errors
-// __DEBUG__ Show all the details of the error
-
-// 作者留言:我正在修改Covstdlib以适配标准错误处理，本库自定义的错误处理宏可能对一些类不起作用
+// Library Version: 1.16.06.2
 
 #if __cplusplus < 201103L
-#error This library needs your compiler support C++11(C++0x) or higher standard.
+#error Covariant C++ Library需要您的编译器支持C++11(C++0x)或者更高标准。请检查您否忘记了[-std=c++11]编译选项。
 #else
-#define __HINT__
-#ifdef __DEBUG__
-#include <cassert>
-#define auto_assert(exp) assert(exp);if(!(exp))throw #exp;
-#elif defined(__HINT__)
-#define auto_assert(exp) if(!(exp))throw #exp;
-#endif
 
 #include <map>
+#include <utility>
 #include <string>
-#include <cstdio>
 #include <deque>
 #include <thread>
 #include <chrono>
@@ -46,17 +33,6 @@
 #include <stdexcept>
 
 namespace cov {
-// I/O控制器
-namespace ioctrl {
-inline void flush();
-inline void endl();
-}
-inline void print(const char *);
-inline void print(void (*)());
-template < typename Type > inline void print(const Type &);
-template < typename Type, typename ... Argt >
-inline void print(const Type &, const Argt & ...);
-
 class baseHolder;
 template < typename T > class holder;
 class genericType;
@@ -65,63 +41,12 @@ template < typename T > class list;
 class timer;
 typedef genericType any;
 typedef unsigned long timer_t;
-
-template < typename T > const std::string& toString(const T &)
-{
-    static std::string str(__func__);
-    str+=" is not defined.";
-    return str;
-}
+// 请根据自己需求来自己实现toString函数
+template < typename T > const std::string& toString(const T &);
 template < typename T > static T *duplicate(const T & obj)
 {
     return new T(obj);
 }
-}
-
-namespace cov {
-template <> void print < int >(const int &i)
-{
-    printf("%d", i);
-}
-template <> void print < double >(const double &d)
-{
-    printf("%f", d);
-}
-template <> void print < char >(const char &c)
-{
-    putchar(c);
-}
-template <> void print < std::string > (const std::string & s)
-{
-    printf("%s", s.c_str());
-}
-}
-inline void cov::print(const char *s)
-{
-    print < std::string > (s);
-}
-inline void cov::print(void (*func) ())
-{
-    func();
-}
-inline void cov::ioctrl::flush()
-{
-    fflush(stdout);
-}
-inline void cov::ioctrl::endl()
-{
-    printf("\n");
-    fflush(stdout);
-}
-template < typename Type > void cov::print(const Type & obj)
-{
-    return;
-}
-template < typename Type, typename...Argt >
-void cov::print(const Type & obj, const Argt & ... argv)
-{
-    print(obj);
-    print(argv...);
 }
 
 // 资源持有者基类
@@ -210,7 +135,8 @@ public:
     }
     const std::string & toString() const
     {
-        auto_assert(this->mDat != nullptr);
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         return this->mDat->toString();
     }
     genericType & operator=(const genericType & var)
@@ -229,12 +155,18 @@ public:
     }
     template < typename T > T & val()
     {
-        auto_assert(typeid(T) == this->type() && this->mDat != nullptr);
+        if(typeid(T) != this->type())
+            throw std::logic_error("请求的类型与对象类型不同");
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         return dynamic_cast < holder < T > *>(this->mDat)->data();
     }
     template < typename T > const T & val() const
     {
-        auto_assert(typeid(T) == this->type() && this->mDat != nullptr);
+        if(typeid(T) != this->type())
+            throw std::logic_error("请求的类型与对象类型不同");
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         return dynamic_cast < holder < T > *>(this->mDat)->data();
     }
     template < typename T > void assign(const T & dat)
@@ -251,12 +183,6 @@ public:
         return *this;
     }
 };
-namespace cov {
-template<> void print<genericType>(const genericType& var)
-{
-    printf("%s",var.toString().c_str());
-}
-}
 
 // 内存管理 Memory Handler
 template < typename T > class cov::handler {
@@ -313,7 +239,8 @@ public:
     // 以只读方式获取源数据引用
     const T & data() const
     {
-        auto_assert(!empty());
+        if(empty())
+            throw std::logic_error("使用了未初始化的对象");
         return *mData;
     }
     // 获取当前数据的引用计数
@@ -484,7 +411,8 @@ public:
     }
     void insert(base_iterator & it, const T & dat)
     {
-        auto_assert(it.usable());
+        if(!it.usable())
+            throw std::logic_error("使用了未初始化的对象");
         node *current = it.mDat;
         node *newdat = new node(current->backward(), new T(dat), current);
         current->backward()->forward(newdat);
@@ -493,7 +421,8 @@ public:
     }
     template < typename...Args > void emplace(base_iterator & it, Args && ... args)
     {
-        auto_assert(it.usable());
+        if(!it.usable())
+            throw std::logic_error("使用了未初始化的对象");
         node *current = it.mDat;
         node *newdat = new node(current->backward(), new T(args...), current);
         current->backward()->forward(newdat);
@@ -524,7 +453,8 @@ public:
     }
     iterator erase(base_iterator & it)
     {
-        auto_assert(it.usable());
+        if(!it.usable())
+            throw std::logic_error("使用了未初始化的对象");
         node *current = it.mDat;
         node *previous = current->backward();
         node *next = current->forward();
@@ -569,7 +499,8 @@ public:
     }
     T & front()
     {
-        auto_assert(mFront.forward()->usable());
+        if(!mFront.forward()->usable())
+            throw std::logic_error("使用了未初始化的对象");
         return *mFront.forward()->data();
     }
     const T & front() const
@@ -578,7 +509,8 @@ public:
     }
     T & back()
     {
-        auto_assert(mBack.backward()->usable());
+        if(!mBack.backward()->usable())
+            throw std::logic_error("使用了未初始化的对象");
         return *mBack.backward()->data();
     }
     const T & back() const
@@ -682,8 +614,8 @@ public:
     virtual ~ base_iterator() = default;
     virtual T & data()
     {
-        auto_assert(this->mDat != nullptr);
-        auto_assert(this->mDat->usable());
+        if(this->mDat == nullptr || !this->mDat->usable())
+            throw std::logic_error("使用了未初始化的对象");
         return *this->mDat->data();
     }
     virtual const T & data() const
@@ -692,7 +624,8 @@ public:
     }
     virtual void data(const T & dat)
     {
-        auto_assert(this->mDat != nullptr);
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         if (this->mDat->usable()) {
             delete this->mDat->data();
             this->mDat->data(nullptr);
@@ -752,12 +685,14 @@ public:
     iterator() = delete;
     virtual void forward() override
     {
-        auto_assert(this->mDat != nullptr);
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         this->mDat = this->mDat->forward();
     }
     virtual void backward() override
     {
-        auto_assert(this->mDat != nullptr);
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         this->mDat = this->mDat->backward();
     }
 };
@@ -769,12 +704,14 @@ public:
     reverse_iterator() = delete;
     virtual void forward() override
     {
-        auto_assert(this->mDat != nullptr);
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         this->mDat = this->mDat->backward();
     }
     virtual void backward() override
     {
-        auto_assert(this->mDat != nullptr);
+        if(this->mDat == nullptr)
+            throw std::logic_error("使用了未初始化的对象");
         this->mDat = this->mDat->forward();
     }
 };
@@ -793,7 +730,7 @@ public:
     {
         m_timer = std::chrono::high_resolution_clock::now();
     }
-    timer_t time(const int unit)
+    timer_t time(timeUnit unit)
     {
         switch (unit) {
         case timeUnit::nanoSec:
@@ -814,7 +751,7 @@ public:
         }
         return 0;
     }
-    void delay(const int unit, timer_t time)
+    void delay(timeUnit unit, timer_t time)
     {
         switch (unit) {
         case timeUnit::nanoSec:
@@ -833,6 +770,15 @@ public:
             std::this_thread::sleep_for(std::chrono::minutes(time));
             break;
         }
+    }
+    template<typename T,typename...Elements>
+    timer_t measure(timeUnit unit,T func,Elements&&...args)
+    {
+        timer_t begin(0),end(0);
+        begin=this->time(unit);
+        func(args...);
+        end=this->time(unit);
+        return end-begin;
     }
 };
 
@@ -948,7 +894,8 @@ static switches switcher_stack;
 template < typename T > void checkType()
 {
     const std::type_info & current_switcher_type = switcher_stack.current()->typeinf();
-    auto_assert(typeid(T) == current_switcher_type);
+    if(typeid(T) != current_switcher_type)
+        throw std::logic_error("请求的类型与对象类型不同");
 }
 // Lambda抽象对象获取函数
 template < typename T > lambdaBlock < T > *GetLambda(T lamb)
@@ -1023,46 +970,70 @@ template < typename _Tp, typename ... Args > struct tuple_wrapper<_Tp, Args ... 
 // 基于类型的Tuple迭代器
 template<typename _Arg,typename _Tp,typename _Node>
 struct type_iterator {
-    static _Arg& get(tuple_node<_Tp,_Node>&var)
+    typedef _Arg type;
+    typedef tuple_node<_Tp,_Node> node_type;
+    static type& get(node_type &var)
     {
-        static_assert(isTypeEqual<_Arg,_Tp>::value,"Type matching failure.");
+        static_assert(isTypeEqual<_Arg,_Tp>::value,"类型匹配失败");
     }
-    static const _Arg& get(const tuple_node<_Tp,_Node>&var)
+    static const type & get(const node_type&var)
     {
-        static_assert(isTypeEqual<_Arg,_Tp>::value,"Type matching failure.");
+        static_assert(isTypeEqual<_Arg,_Tp>::value,"类型匹配失败");
+    }
+    static void set(const type&,node_type&)
+    {
+        static_assert(isTypeEqual<_Arg,_Tp>::value,"类型匹配失败");
     }
 };
 template<typename _Tp,typename _Node>
 struct type_iterator<_Tp,_Tp,_Node> {
-    static _Tp& get(tuple_node<_Tp,_Node>&var)
+    typedef _Tp type;
+    typedef tuple_node<_Tp,_Node> node_type;
+    static _Tp& get(node_type &var)
     {
         return var.current;
     }
-    static const _Tp& get(const tuple_node<_Tp,_Node>&var)
+    static const _Tp& get(const node_type &var)
     {
         return var.current;
+    }
+    static void set(const type& _dat,node_type& _t)
+    {
+        _t.current=_dat;
     }
 };
-template<typename T,typename fT,typename sT>
-struct type_iterator<T,T,tuple_node<fT,sT>> {
-    static T& get(tuple_node<T,tuple_node<fT,sT>>&var)
+template<typename _Tp,typename _fT,typename _sT>
+struct type_iterator<_Tp,_Tp,tuple_node<_fT,_sT>> {
+    typedef _Tp type;
+    typedef tuple_node<_Tp,tuple_node<_fT,_sT>> node_type;
+    static type& get(node_type &var)
     {
         return var.current;
     }
-    static const T& get(const tuple_node<T,tuple_node<fT,sT>>&var)
+    static const type& get(const node_type &var)
     {
         return var.current;
+    }
+    static void set(const type& _dat,node_type& _t)
+    {
+        _t.current=_dat;
     }
 };
-template<typename Arg,typename T,typename fT,typename sT>
-struct type_iterator<Arg,T,tuple_node<fT,sT>> {
-    static Arg& get(tuple_node<T,tuple_node<fT,sT>>&var)
+template<typename _Arg,typename _Tp,typename _fT,typename _sT>
+struct type_iterator<_Arg,_Tp,tuple_node<_fT,_sT>> {
+    typedef _Arg type;
+    typedef tuple_node<_Tp,tuple_node<_fT,_sT>> node_type;
+    static type& get(node_type &var)
     {
-        return type_iterator<Arg,fT,sT>::get(var.forward);
+        return type_iterator<_Arg,_fT,_sT>::get(var.forward);
     }
-    static const Arg& get(const tuple_node<T,tuple_node<fT,sT>>&var)
+    static const type& get(const node_type &var)
     {
-        return type_iterator<Arg,fT,sT>::get(var.forward);
+        return type_iterator<_Arg,_fT,_sT>::get(var.forward);
+    }
+    static void set(const type & _dat, node_type & _t)
+    {
+        type_iterator<_Arg,_fT,_sT>::set(_dat, _t.forward);
     }
 };
 // 基于下标的Tuple迭代器
@@ -1183,7 +1154,7 @@ public:
 // Tuple类制作函数
 template<typename...Elements>tuple<Elements...> make_tuple(const Elements&...args)
 {
-    return tuple<Elements...>(args...);
+    return std::move(tuple<Elements...>(args...));
 }
 }
 
@@ -1300,25 +1271,25 @@ public:
     T& operator*()
     {
         if(!usable())
-            throw std::logic_error("Used an uninitialized object.");
+            throw std::logic_error("使用了未初始化的对象");
         return *mSource;
     }
     const T& operator*() const
     {
         if(!usable())
-            throw std::logic_error("Used an uninitialized object.");
+            throw std::logic_error("使用了未初始化的对象");
         return *mSource;
     }
     T* operator->()
     {
         if(!usable())
-            throw std::logic_error("Used an uninitialized object.");
+            throw std::logic_error("使用了未初始化的对象");
         return mSource;
     }
     const T* operator->() const
     {
         if(!usable())
-            throw std::logic_error("Used an uninitialized object.");
+            throw std::logic_error("使用了未初始化的对象");
         return mSource;
     }
     operator bool() const
@@ -1456,5 +1427,4 @@ template<typename T> const T* sourceHolder<T>::hintAddr=nullptr;
 template<typename T> extern typename allocator<T>::collector allocator<T>::mCollector;
 }
 }
-
 #endif

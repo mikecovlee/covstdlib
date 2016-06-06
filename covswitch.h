@@ -26,49 +26,49 @@
 #include "covstdlib.h"
 
 namespace cov {
-	template < typename _Type, typename _Func > class SwitchCase {
-	protected:
-		const _Type& mKey;
-		const _Func& mFunction;
-	public:
-		SwitchCase() = delete;
-		SwitchCase(const _Type & key, const _Func & func):mKey(key), mFunction(func)
-		{
-		}
-		SwitchCase(const SwitchCase &) = delete;
-		virtual ~ SwitchCase() = default;
-		const _Type & key() const
-		{
-			return mKey;
-		}
-		void exec() const
-		{
-			mFunction();
-		}
-	};
-	template < typename T, typename X >
-	const SwitchCase < T, X >* MakeSwitchCase(const T & key, const X & func)
-	{
-		return new SwitchCase < T, X > (key, func);
-	}
-	template <typename T>
-	void RunSwitch(const T&,const cov::final_tuple_node & _t)
-	{
-	}
-	template < typename _KeyT, typename _fT, typename _sT >
-	void RunSwitch(const _KeyT & key, const cov::tuple_node < _fT, _sT > &_t)
-	{
-		if (_t.current->key() == key)
-			_t.current->exec();
-		delete _t.current;
-		RunSwitch(key,_t.forward);
-	}
-	template < typename T, typename...Elements >
-	void Switch(const T & condition, const SwitchCase < T, Elements >*... arguments)
-	{
-		auto cases=cov::make_tuple(arguments...);
-		RunSwitch(condition, cases);
-	}
+template < typename _Type, typename _Func > class SwitchCase {
+protected:
+    const _Type& mKey;
+    const _Func& mFunction;
+public:
+    SwitchCase() = delete;
+    SwitchCase(const _Type & key, const _Func & func):mKey(key), mFunction(func)
+    {
+    }
+    SwitchCase(const SwitchCase &) = delete;
+    virtual ~ SwitchCase() = default;
+    const _Type & key() const
+    {
+        return mKey;
+    }
+    void exec() const
+    {
+        mFunction();
+    }
+};
+template < typename T, typename X >
+const SwitchCase < T, X >* MakeSwitchCase(const T & key, const X & func)
+{
+    return new SwitchCase < T, X > (key, func);
+}
+template <typename T>
+void RunSwitch(const T&,const cov::final_tuple_node & _t)
+{
+}
+template < typename _KeyT, typename _fT, typename _sT >
+void RunSwitch(const _KeyT & key, const cov::tuple_node < _fT, _sT > &_t)
+{
+    if (_t.current->key() == key)
+        _t.current->exec();
+    delete _t.current;
+    RunSwitch(key,_t.forward);
+}
+template < typename T, typename...Elements >
+void Switch(const T & condition, const SwitchCase < T, Elements >*... arguments)
+{
+    auto cases=cov::make_tuple(arguments...);
+    RunSwitch(condition, cases);
+}
 }
 #define Switch(key) cov::Switch(key
 #define Case(key) ,cov::MakeSwitchCase(key,[&]{
