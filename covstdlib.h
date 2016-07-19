@@ -16,7 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // Copyright (C) 2016 Mike Covariant Lee(李登淳)
-// Library Version: 1.16.06.2
+// Library Version: 1.16.07.01
 
 #if __cplusplus < 201103L
 #error Covariant C++ Library需要您的编译器支持C++11(C++0x)或者更高标准。请检查您否忘记了[-std=c++11]编译选项。
@@ -28,97 +28,97 @@
 #include <deque>
 #include <thread>
 #include <chrono>
+#include <sstream>
+#include <ostream>
 #include <memory>
 #include <typeinfo>
 #include <stdexcept>
+#include <typeindex>
 
 namespace cov {
-	class baseHolder;
-	template < typename T > class holder;
-	class genericType;
+	class any;
 	template < typename T > class handler;
 	template < typename T > class list;
 	class timer;
-	typedef genericType any;
+	class argument_list;
 	typedef unsigned long timer_t;
-// 请根据自己需求来自己实现toString函数
-	template < typename T > const std::string& toString(const T &);
+	template < typename T > const std::string& toString(const T & val)
+	{
+		static std::string str;
+		std::stringstream ss;
+		ss<<val;
+		ss>>str;
+		return str;
+	}
 	template < typename T > static T *duplicate(const T & obj)
 	{
 		return new T(obj);
 	}
 }
 
-// 资源持有者基类
-class cov::baseHolder {
-public:
-	baseHolder() = default;
-	virtual ~ baseHolder() = default;
-	virtual const std::type_info & type() const = 0;
-	virtual baseHolder *duplicate() = 0;
-	virtual bool compare(const baseHolder *) const = 0;
-	virtual const std::string & toString() const = 0;
-};
-// 资源持有者派生类
-template < typename T > class cov::holder:public baseHolder {
+// 动态类型 Any
+class cov::any final {
 protected:
-	T mDat;
-public:
-	holder() = default;
-	holder(const T & dat):mDat(dat)
-	{
-	}
-	virtual ~ holder() = default;
-	virtual const std::type_info & type() const override
-	{
-		return typeid(T);
-	}
-	virtual baseHolder *duplicate() override
-	{
-		return new holder(mDat);
-	}
-	virtual bool compare(const baseHolder * obj)const override
-	{
-		if (obj->type() == this->type()) {
-			const holder < T > *ptr = dynamic_cast < const holder < T > *>(obj);
-			if (ptr == nullptr)
+	// 资源持有者基类
+	class baseHolder {
+	public:
+		baseHolder() = default;
+		virtual ~ baseHolder() = default;
+		virtual const std::type_info & type() const = 0;
+		virtual baseHolder *duplicate() = 0;
+		virtual bool compare(const baseHolder *) const = 0;
+		virtual const std::string & toString() const = 0;
+	};
+	// 资源持有者派生类
+	template < typename T > class holder final:public baseHolder {
+	protected:
+		T mDat;
+	public:
+		holder() = default;
+		holder(const T & dat):mDat(dat) {}
+		virtual ~ holder() = default;
+		virtual const std::type_info & type() const override
+		{
+			return typeid(T);
+		}
+		virtual baseHolder *duplicate() override
+		{
+			return new holder(mDat);
+		}
+		virtual bool compare(const baseHolder * obj)const override
+		{
+			if (obj->type() == this->type()) {
+				const holder < T > *ptr = dynamic_cast < const holder < T > *>(obj);
+				if (ptr == nullptr)
+					return false;
+				return mDat == ptr->data();
+			} else
 				return false;
-			return mDat == ptr->data();
-		} else
-			return false;
-	}
-	virtual const std::string & toString() const override
-	{
-		return cov::toString(mDat);
-	}
-	T & data()
-	{
-		return mDat;
-	}
-	const T & data() const
-	{
-		return this->data();
-	}
-	void data(const T & dat)
-	{
-		mDat = dat;
-	}
-};
-// 动态类型 Generic Type
-class cov::genericType {
-protected:
+		}
+		virtual const std::string & toString() const override
+		{
+			return cov::toString(mDat);
+		}
+		T & data()
+		{
+			return mDat;
+		}
+		const T & data() const
+		{
+			return this->data();
+		}
+		void data(const T & dat)
+		{
+			mDat = dat;
+		}
+	};
 	baseHolder * mDat;
 public:
-	genericType():mDat(nullptr)
-	{
-	}
-	template < typename T > genericType(const T & dat):mDat(new holder < T > (dat))
-	{
-	}
-	genericType(const genericType & v):mDat(v.mDat->duplicate())
-	{
-	}
-	~genericType()
+	any():mDat(nullptr) {}
+	template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
+	any(const any & v):mDat(v.mDat->duplicate()) {}
+	any(any&& v):mDat(v.mDat->duplicate()) {}
+	~any()
 	{
 		delete mDat;
 	}
@@ -139,17 +139,17 @@ public:
 			throw std::logic_error("使用了未初始化的对象");
 		return this->mDat->toString();
 	}
-	genericType & operator=(const genericType & var)
+	any & operator=(const any & var)
 	{
 		delete mDat;
 		mDat = var.mDat->duplicate();
 		return *this;
 	}
-	bool operator==(const genericType & var) const
+	bool operator==(const any & var) const
 	{
 		return this->mDat->compare(var.mDat);
 	}
-	bool operator!=(const genericType & var)const
+	bool operator!=(const any & var)const
 	{
 		return !this->mDat->compare(var.mDat);
 	}
@@ -169,6 +169,14 @@ public:
 			throw std::logic_error("使用了未初始化的对象");
 		return dynamic_cast < holder < T > *>(this->mDat)->data();
 	}
+	template < typename T > operator T&()
+	{
+		return this->val<T>();
+	}
+	template < typename T > operator const T&() const
+	{
+		return this->val<T>();
+	}
 	template < typename T > void assign(const T & dat)
 	{
 		if (typeid(T) != this->type() || this->mDat == nullptr) {
@@ -177,12 +185,18 @@ public:
 		}
 		return dynamic_cast < holder < T > *>(mDat)->data(dat);
 	}
-	template < typename T > genericType & operator=(const T & dat)
+	template < typename T > any & operator=(const T & dat)
 	{
 		assign(dat);
 		return *this;
 	}
 };
+
+std::ostream& operator<<(std::ostream& out,const cov::any& val)
+{
+	out<<val.toString();
+	return out;
+}
 
 // 内存管理 Memory Handler
 template < typename T > class cov::handler {
@@ -1161,270 +1175,400 @@ namespace cov {
 // Covariant Memory
 
 namespace cov {
-	namespace memory {
-		namespace allocator_policy {
-			static bool full_manual=false; //全手动
-			static bool delay_construction=true; //延时构造
-			static bool allocate_on_demand=true; //写时分配
-			static bool memory_alignment=true; //内存对齐
-			static std::size_t max_recycle_count=1000; //回收栈可容纳的对象数量
-		}
-// 资源持有者类
-		template<typename T>
-		class sourceHolder {
-		public:
-			static std::allocator<T> sourceManager;
-		protected:
-			static const T* hintAddr;
-			std::size_t mSize=0;
-			bool mAvailable=false;
-			bool mUsable=false;
-			T* mSource=nullptr;
-			void mAllocate(std::size_t n=1)
-			{
-				mSize=n;
-				if(allocator_policy::memory_alignment&&hintAddr!=nullptr) {
-					mSource=sourceManager.allocate(mSize,hintAddr);
-					hintAddr=mSource;
-				} else
-					mSource=sourceManager.allocate(mSize);
-			}
-		public:
-			void allocate(std::size_t n=1)
-			{
-				destroy();
-				if(!mAvailable) {
-					mAllocate();
-					mAvailable=true;
-				}
-			}
-			void deallocate()
-			{
-				destroy();
-				if(mAvailable) {
-					sourceManager.deallocate(mSource,mSize);
-					mSize=0;
-					mAvailable=false;
-				}
-			}
-			template<typename...Args>void construct(Args&&...args)
-			{
-				allocate();
-				sourceManager.construct(mSource,args...);
-				mUsable=true;
-			}
-			void destroy()
-			{
-				if(mAvailable&&mUsable) {
-					sourceManager.destroy(mSource);
-					mUsable=false;
-				}
-			}
-			inline bool usable() const
-			{
-				return mAvailable&&mUsable;
-			}
-			T* source()
-			{
-				return mSource;
-			}
-			const T* source() const
-			{
-				return mSource;
-			}
-			void data(const T& dat)
-			{
-				if(!usable())
-					throw std::logic_error("Used an uninitialized object.");
-				*mSource=dat;
-			}
-			T& data()
-			{
-				if(!usable())
-					throw std::logic_error("Used an uninitialized object.");
-				return *mSource;
-			}
-			const T& data() const
-			{
-				if(!usable())
-					throw std::logic_error("Used an uninitialized object.");
-				return *mSource;
-			}
-		public:
-			sourceHolder()=default;
-			sourceHolder(const sourceHolder&)=delete;
-			template<typename...Args>
-			explicit sourceHolder(Args&&...args)
-			{
-				construct(args...);
-			}
-			~sourceHolder()=default;
-			sourceHolder& operator=(const sourceHolder&)=delete;
-			bool operator==(const sourceHolder& holder) const
-			{
-				return mSource==holder.mSource;
-			}
-			bool operator!=(const sourceHolder& holder) const
-			{
-				return mSource!=holder.mSource;
-			}
-			T& operator*()
-			{
-				if(!usable())
-					throw std::logic_error("使用了未初始化的对象");
-				return *mSource;
-			}
-			const T& operator*() const
-			{
-				if(!usable())
-					throw std::logic_error("使用了未初始化的对象");
-				return *mSource;
-			}
-			T* operator->()
-			{
-				if(!usable())
-					throw std::logic_error("使用了未初始化的对象");
-				return mSource;
-			}
-			const T* operator->() const
-			{
-				if(!usable())
-					throw std::logic_error("使用了未初始化的对象");
-				return mSource;
-			}
-			operator bool() const
-			{
-				return mAvailable;
-			}
-		};
-		template<typename> class allocator;
-// 持有者类
-		template<typename T>
-		class holder {
-			friend class allocator<T>;
-			std::shared_ptr<sourceHolder<T>> mDat;
-			static void deleter(sourceHolder<T>*);
-		public:
-			holder():mDat(new sourceHolder<T>(),deleter)
-			{
-				if(!allocator_policy::allocate_on_demand)
-					mDat->allocate();
-				if(!allocator_policy::delay_construction||allocator_policy::full_manual)
-					mDat->construct();
-			}
-			holder(holder&&)=default;
-			explicit holder(holder&)=default;
-			explicit holder(sourceHolder<T>* ptr):mDat(ptr) {}
-			template<typename...Args>explicit holder(Args&&...args):mDat(new sourceHolder<T>(args...),deleter) {}
-			virtual ~holder()=default;
-			T& data()
-			{
-				return mDat->data();
-			}
-			const T& data() const
-			{
-				return mDat->data();
-			}
-			sourceHolder<T>& raw_data()
-			{
-				return *mDat;
-			}
-			const sourceHolder<T>& raw_data() const
-			{
-				return *mDat;
-			}
-			const T& operator=(const T& data)
-			{
-				if(!mDat->usable())
-					mDat->construct(data);
-				else
-					mDat->data(data);
-				return data;
-			}
-			holder& operator=(const holder&)=default;
-			holder& operator=(holder&&)=default;
-			bool operator==(const holder& obj) const
-			{
-				return this->dat()==obj.dat();
-			}
-			bool operator!=(const holder& obj) const
-			{
-				return this->dat()!=obj.dat();
-			}
-		};
-// 分配器类
-		template<typename T>
-		class allocator {
-			friend void holder<T>::deleter(sourceHolder<T>*);
-			class collector {
-				friend class allocator;
-				friend void holder<T>::deleter(sourceHolder<T>*);
-				std::deque<sourceHolder<T>*>recycleStack;
-				~collector();
-			};
-			static collector mCollector;
-		public:
-			static inline holder<T> allocate()
-			{
-				if(allocator_policy::full_manual)
-					return std::move(holder<T>());
-				if(!mCollector.recycleStack.empty()) {
-					holder<T> ret(mCollector.recycleStack.front());
-					mCollector.recycleStack.pop_front();
-					return std::move(ret);
-				}
-				return std::move(holder<T>());
-			}
-			template<typename...Args>static inline holder<T> allocate(Args&&...args)
-			{
-				if(allocator_policy::full_manual)
-					return std::move(holder<T>(args...));
-				if(!mCollector.recycleStack.empty()) {
-					holder<T> ret(mCollector.recycleStack.front());
-					mCollector.recycleStack.pop_front();
-					ret.raw_data().construct(args...);
-					return std::move(ret);
-				}
-				return std::move(holder<T>(args...));
-			}
-			static inline void recycle()
-			{
-				while(mCollector.recycleStack.size()>allocator_policy::max_recycle_count) {
-					mCollector.recycleStack.back()->deallocate();
-					delete mCollector.recycleStack.back();
-					mCollector.recycleStack.pop_back();
-				}
-			}
-			static inline void deallocate(holder<T>& source)
-			{
-				source.mDat=nullptr;
-			}
-		};
-		template<typename T>allocator<T>::collector::~collector()
-		{
-			for(auto&it:recycleStack) {
-				it->deallocate();
-				delete it;
-			}
-		}
-		template<typename T>void holder<T>::deleter(sourceHolder<T>* ptr)
-		{
-			if(allocator_policy::full_manual) {
-				if(ptr!=nullptr) {
-					ptr->deallocate();
-					delete ptr;
-				}
-			} else {
-				if(ptr!=nullptr) {
-					ptr->destroy();
-					allocator<T>::mCollector.recycleStack.push_front(ptr);
-				}
-				allocator<T>::recycle();
-			}
-		}
-		template<typename T> std::allocator<T> sourceHolder<T>::sourceManager;
-		template<typename T> const T* sourceHolder<T>::hintAddr=nullptr;
-		template<typename T> typename allocator<T>::collector allocator<T>::mCollector;
+	namespace allocator_policy {
+		static bool full_manual=false; //全手动
+		static bool delay_construction=true; //延时构造
+		static bool allocate_on_demand=true; //写时分配
+		static bool memory_alignment=true; //内存对齐
+		static std::size_t max_recycle_count=1000; //回收栈可容纳的对象数量
 	}
+// 资源持有者类
+	template<typename T>
+	class sourceHolder {
+	public:
+		static std::allocator<T> sourceManager;
+	protected:
+		static const T* hintAddr;
+		std::size_t mSize=0;
+		bool mAvailable=false;
+		bool mUsable=false;
+		T* mSource=nullptr;
+		void mAllocate(std::size_t n=1)
+		{
+			mSize=n;
+			if(allocator_policy::memory_alignment&&hintAddr!=nullptr) {
+				mSource=sourceManager.allocate(mSize,hintAddr);
+				hintAddr=mSource;
+			} else
+				mSource=sourceManager.allocate(mSize);
+		}
+	public:
+		void allocate(std::size_t n=1)
+		{
+			destroy();
+			if(!mAvailable) {
+				mAllocate();
+				mAvailable=true;
+			}
+		}
+		void deallocate()
+		{
+			destroy();
+			if(mAvailable) {
+				sourceManager.deallocate(mSource,mSize);
+				mSize=0;
+				mAvailable=false;
+			}
+		}
+		template<typename...Args>void construct(Args&&...args)
+		{
+			allocate();
+			sourceManager.construct(mSource,args...);
+			mUsable=true;
+		}
+		void destroy()
+		{
+			if(mAvailable&&mUsable) {
+				sourceManager.destroy(mSource);
+				mUsable=false;
+			}
+		}
+		inline bool usable() const
+		{
+			return mAvailable&&mUsable;
+		}
+		T* source()
+		{
+			return mSource;
+		}
+		const T* source() const
+		{
+			return mSource;
+		}
+		void data(const T& dat)
+		{
+			if(!usable())
+				throw std::logic_error("Used an uninitialized object.");
+			*mSource=dat;
+		}
+		T& data()
+		{
+			if(!usable())
+				throw std::logic_error("Used an uninitialized object.");
+			return *mSource;
+		}
+		const T& data() const
+		{
+			if(!usable())
+				throw std::logic_error("Used an uninitialized object.");
+			return *mSource;
+		}
+	public:
+		sourceHolder()=default;
+		sourceHolder(const sourceHolder&)=delete;
+		template<typename...Args>
+		explicit sourceHolder(Args&&...args)
+		{
+			construct(args...);
+		}
+		~sourceHolder()=default;
+		sourceHolder& operator=(const sourceHolder&)=delete;
+		bool operator==(const sourceHolder& holder) const
+		{
+			return mSource==holder.mSource;
+		}
+		bool operator!=(const sourceHolder& holder) const
+		{
+			return mSource!=holder.mSource;
+		}
+		T& operator*()
+		{
+			if(!usable())
+				throw std::logic_error("使用了未初始化的对象");
+			return *mSource;
+		}
+		const T& operator*() const
+		{
+			if(!usable())
+				throw std::logic_error("使用了未初始化的对象");
+			return *mSource;
+		}
+		T* operator->()
+		{
+			if(!usable())
+				throw std::logic_error("使用了未初始化的对象");
+			return mSource;
+		}
+		const T* operator->() const
+		{
+			if(!usable())
+				throw std::logic_error("使用了未初始化的对象");
+			return mSource;
+		}
+		operator bool() const
+		{
+			return mAvailable;
+		}
+	};
+	template<typename> class allocator;
+// 持有者类
+	template<typename T>
+	class holder {
+		friend class allocator<T>;
+		std::shared_ptr<sourceHolder<T>> mDat;
+		static void deleter(sourceHolder<T>*);
+	public:
+		holder():mDat(new sourceHolder<T>(),deleter)
+		{
+			if(!allocator_policy::allocate_on_demand)
+				mDat->allocate();
+			if(!allocator_policy::delay_construction||allocator_policy::full_manual)
+				mDat->construct();
+		}
+		holder(holder&&)=default;
+		explicit holder(holder&)=default;
+		explicit holder(sourceHolder<T>* ptr):mDat(ptr) {}
+		template<typename...Args>explicit holder(Args&&...args):mDat(new sourceHolder<T>(args...),deleter) {}
+		virtual ~holder()=default;
+		T& data()
+		{
+			return mDat->data();
+		}
+		const T& data() const
+		{
+			return mDat->data();
+		}
+		sourceHolder<T>& raw_data()
+		{
+			return *mDat;
+		}
+		const sourceHolder<T>& raw_data() const
+		{
+			return *mDat;
+		}
+		const T& operator=(const T& data)
+		{
+			if(!mDat->usable())
+				mDat->construct(data);
+			else
+				mDat->data(data);
+			return data;
+		}
+		holder& operator=(const holder&)=default;
+		holder& operator=(holder&&)=default;
+		bool operator==(const holder& obj) const
+		{
+			return this->dat()==obj.dat();
+		}
+		bool operator!=(const holder& obj) const
+		{
+			return this->dat()!=obj.dat();
+		}
+	};
+// 分配器类
+	template<typename T>
+	class allocator {
+		friend void holder<T>::deleter(sourceHolder<T>*);
+		class collector {
+			friend class allocator;
+			friend void holder<T>::deleter(sourceHolder<T>*);
+			std::deque<sourceHolder<T>*>recycleStack;
+			~collector();
+		};
+		static collector mCollector;
+	public:
+		static inline holder<T> allocate()
+		{
+			if(allocator_policy::full_manual)
+				return std::move(holder<T>());
+			if(!mCollector.recycleStack.empty()) {
+				holder<T> ret(mCollector.recycleStack.front());
+				mCollector.recycleStack.pop_front();
+				return std::move(ret);
+			}
+			return std::move(holder<T>());
+		}
+		template<typename...Args>static inline holder<T> allocate(Args&&...args)
+		{
+			if(allocator_policy::full_manual)
+				return std::move(holder<T>(args...));
+			if(!mCollector.recycleStack.empty()) {
+				holder<T> ret(mCollector.recycleStack.front());
+				mCollector.recycleStack.pop_front();
+				ret.raw_data().construct(args...);
+				return std::move(ret);
+			}
+			return std::move(holder<T>(args...));
+		}
+		static inline void recycle()
+		{
+			while(mCollector.recycleStack.size()>allocator_policy::max_recycle_count) {
+				mCollector.recycleStack.back()->deallocate();
+				delete mCollector.recycleStack.back();
+				mCollector.recycleStack.pop_back();
+			}
+		}
+		static inline void deallocate(holder<T>& source)
+		{
+			source.mDat=nullptr;
+		}
+	};
+	template<typename T>allocator<T>::collector::~collector()
+	{
+		for(auto&it:recycleStack) {
+			it->deallocate();
+			delete it;
+		}
+	}
+	template<typename T>void holder<T>::deleter(sourceHolder<T>* ptr)
+	{
+		if(allocator_policy::full_manual) {
+			if(ptr!=nullptr) {
+				ptr->deallocate();
+				delete ptr;
+			}
+		} else {
+			if(ptr!=nullptr) {
+				ptr->destroy();
+				allocator<T>::mCollector.recycleStack.push_front(ptr);
+			}
+			allocator<T>::recycle();
+		}
+	}
+	template<typename T> std::allocator<T> sourceHolder<T>::sourceManager;
+	template<typename T> const T* sourceHolder<T>::hintAddr=nullptr;
+	template<typename T> typename allocator<T>::collector allocator<T>::mCollector;
 }
+
+// Covariant Argument List
+
+class cov::argument_list final {
+private:
+	std::deque<std::type_index> mTypes;
+	std::deque<cov::any> mArgs;
+	template<typename _Tp>void unpack_types()
+	{
+		this->mTypes.push_back(typeid(_Tp));
+	}
+	template<typename _Tp,typename _fT,typename...ArgTypes>void unpack_types()
+	{
+		this->mTypes.push_back(typeid(_Tp));
+		unpack_types<_fT,ArgTypes...>();
+	}
+	template<typename _Tp>int count_types(int index=1) const
+	{
+		return index;
+	}
+	template<typename _Tp,typename _fT,typename...ArgTypes>int count_types(int index=1) const
+	{
+		return count_types<_fT,ArgTypes...>(++index);
+	}
+	template<typename _Tp>std::string get_type(int expect,int index) const
+	{
+		if(expect==index)
+			return typeid(_Tp).name();
+	}
+	template<typename _Tp,typename _fT,typename...ArgTypes>std::string get_type(int expect,int index) const
+	{
+		if(expect==index)
+			return typeid(_Tp).name();
+		else
+			return get_type<_fT,ArgTypes...>(expect,++index);
+	}
+	template<typename _Tp>int check_types(int index,std::deque<std::type_index>::const_iterator it) const
+	{
+		if(it!=this->mTypes.end()&&*it==typeid(_Tp))
+			return -1;
+		else
+			return index;
+	}
+	template<typename _Tp,typename _fT,typename...ArgTypes>int check_types(int index,std::deque<std::type_index>::const_iterator it) const
+	{
+		if(it!=this->mTypes.end()&&*it==typeid(_Tp))
+			return check_types<_fT,ArgTypes...>(++index,++it);
+		else
+			return index;
+	}
+public:
+	typedef std::deque<cov::any>::iterator iterator;
+	typedef std::deque<cov::any>::const_iterator const_iterator;
+	argument_list()=delete;
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs({args...})
+	{
+		unpack_types<ArgTypes...>();
+	}
+	argument_list(const argument_list&)=default;
+	argument_list(argument_list&&)=default;
+	~argument_list()=default;
+	argument_list& operator=(const argument_list& arglist)
+	{
+		if(&arglist!=this&&arglist.mTypes==this->mTypes)
+			this->mArgs=arglist.mArgs;
+		return *this;
+	}
+	argument_list& operator=(argument_list&& arglist)
+	{
+		if(&arglist!=this&&arglist.mTypes==this->mTypes)
+			this->mArgs=arglist.mArgs;
+		return *this;
+	}
+	bool operator==(const argument_list& arglist)
+	{
+		if(&arglist==this)
+			return true;
+		return arglist.mTypes==this->mTypes;
+	}
+	bool operator!=(const argument_list& arglist)
+	{
+		if(&arglist==this)
+			return false;
+		return arglist.mTypes!=this->mTypes;
+	}
+	cov::any& operator[](std::size_t posit)
+	{
+		return this->mArgs.at(posit);
+	}
+	const cov::any& operator[](std::size_t posit) const
+	{
+		return this->mArgs.at(posit);
+	}
+	cov::any& at(std::size_t posit)
+	{
+		return this->mArgs.at(posit);
+	}
+	const cov::any& at(std::size_t posit) const
+	{
+		return this->mArgs.at(posit);
+	}
+	iterator begin()
+	{
+		return this->mArgs.begin();
+	}
+	const_iterator begin() const
+	{
+		return this->mArgs.begin();
+	}
+	iterator end()
+	{
+		return this->mArgs.end();
+	}
+	const_iterator end() const
+	{
+		return this->mArgs.end();
+	}
+	std::size_t size() const
+	{
+		return this->mArgs.size();
+	}
+	template<typename...ArgTypes>void check(std::string func) const
+	{
+		if(count_types<ArgTypes...>()==this->mTypes.size()) {
+			int result=check_types<ArgTypes...>(1,this->mTypes.begin());
+			if(result!=-1)
+				throw std::invalid_argument("在函数\""+func+"\"中:参数类型错误:在位置"+cov::toString(result)+".预期的参数类型为"+get_type<ArgTypes...>(result,1));
+		} else
+			throw std::logic_error("在函数\""+func+"\"中:参数数量错误.预期的参数数量为"+cov::toString(count_types<ArgTypes...>()));
+	}
+};
+
 #endif
