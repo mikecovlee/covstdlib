@@ -16,7 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // Copyright (C) 2016 Mike Covariant Lee(李登淳)
-// Library Version: 1.16.07.01
+// Library Version: 1.16.08.01
 
 #if __cplusplus < 201103L
 #error Covariant C++ Library需要您的编译器支持C++11(C++0x)或者更高标准。请检查您否忘记了[-std=c++11]编译选项。
@@ -1570,5 +1570,137 @@ public:
 			throw std::logic_error("在函数\""+func+"\"中:参数数量错误.预期的参数数量为"+cov::toString(count_types<ArgTypes...>()));
 	}
 };
+
+// Covariant Function Index
+
+namespace cov {
+	template<typename T>struct is_constant {
+		static constexpr bool value=false;
+	};
+	template<typename T>struct is_constant<T const> {
+		static constexpr bool value=true;
+	};
+	template < typename _Tp > class is_functional {
+		template < typename T, decltype(&T::operator()) X >struct matcher;
+		template < typename T, typename X > static constexpr bool match(X *)
+		{
+			return false;
+		}
+		template < typename T, typename X > static constexpr bool match(matcher < T, &T::operator() > *)
+		{
+			return true;
+		}
+	public:
+		static constexpr bool value = match < _Tp, decltype(nullptr) > (nullptr);
+	};
+	template<typename T>
+	class function_index {
+	public:
+		static constexpr bool is_member_function=false;
+		static constexpr bool is_function_object=is_functional<T>::value;
+		typedef T type;
+		typedef void return_type;
+	private:
+		type function;
+	public:
+		function_index(type func):function(func) {}
+		template<typename...Args>
+		decltype(std::declval<type>()(std::declval<Args>()...))
+		call(Args&&...args)
+		{
+			static_assert(is_function_object,"Target is not a function object.");
+			return function(args...);
+		}
+	};
+	template<typename _rT,typename...Args>
+	class function_index<_rT(*)(Args...)> {
+	public:
+		static constexpr bool is_member_function=false;
+		static constexpr bool is_function_object=false;
+		typedef _rT(*type)(Args...);
+		typedef _rT return_type;
+	private:
+		type function;
+	public:
+		function_index(type func):function(func) {}
+		_rT call(Args&&...args)
+		{
+			return function(args...);
+		}
+	};
+	template<typename T,typename _rT,typename...Args>
+	class function_index<_rT(T::*)(Args...)> {
+	public:
+		static constexpr bool is_member_function=true;
+		static constexpr bool is_function_object=false;
+		typedef _rT(T::*type)(Args...);
+		typedef _rT return_type;
+	private:
+		T* object=nullptr;
+		type function;
+	public:
+		function_index(type func):function(func) {}
+		function_index(T* ptr,type func):object(ptr),function(func) {}
+		_rT call(Args&&...args)
+		{
+			if(object==nullptr)
+				throw std::logic_error("Call member function with null pointer.");
+			return (object->*function)(args...);
+		}
+		_rT call(T* this_ptr,Args&&...args)
+		{
+			if(this_ptr==nullptr)
+				throw std::logic_error("Call member function with null pointer.");
+			return (this_ptr->*function)(args...);
+		}
+	};
+	template<typename T,typename _rT,typename...Args>
+	class function_index<_rT(T::*)(Args...) const> {
+	public:
+		static constexpr bool is_member_function=true;
+		static constexpr bool is_function_object=false;
+		typedef _rT(T::*type)(Args...) const;
+		typedef _rT return_type;
+	private:
+		const T* object=nullptr;
+		type function;
+	public:
+		function_index(type func):function(func) {}
+		function_index(const T* ptr,type func):object(ptr),function(func) {}
+		_rT call(Args&&...args)
+		{
+			if(object==nullptr)
+				throw std::logic_error("Call member function with null pointer.");
+			return (object->*function)(args...);
+		}
+		_rT call(const T* this_ptr,Args&&...args)
+		{
+			if(this_ptr==nullptr)
+				throw std::logic_error("Call member function with null pointer.");
+			return (this_ptr->*function)(args...);
+		}
+	};
+	template<bool,typename>struct intelligent_infer_function;
+	template<typename T>struct intelligent_infer_function<true,T> {
+		typedef decltype(&T::operator()) real_type;
+		static function_index<real_type> get(T func)
+		{
+			return function_index<real_type>(&func,&T::operator());
+		}
+	};
+	template<typename T>struct intelligent_infer_function<false,T> {
+		typedef T real_type;
+		static function_index<real_type> get(T func)
+		{
+			return function_index<real_type>(func);
+		}
+	};
+	template<typename T>
+	function_index<typename intelligent_infer_function<is_functional<T>::value,T>::real_type>
+	make_function_index(T func)
+	{
+		return intelligent_infer_function<is_functional<T>::value,T>::get(func);
+	}
+}
 
 #endif
