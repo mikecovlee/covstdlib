@@ -16,7 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 // Copyright (C) 2016 Mike Covariant Lee(李登淳)
-// Library Version: 1.16.08.01
+// Library Version: 1.16.08.02
 
 #if __cplusplus < 201103L
 #error Covariant C++ Library需要您的编译器支持C++11(C++0x)或者更高标准。请检查您否忘记了[-std=c++11]编译选项。
@@ -949,14 +949,6 @@ namespace cov {
 	}
 }
 
-#define SWITCH(obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher(obj));
-#define SWITCH_T(typ,obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher<typ>(obj));
-#define ENDSWITCH cov::logic::switcher_stack.current()->perform();cov::logic::switcher_stack.pop();});
-#define CASE(obj) cov::logic::addMethod(cov::logic::switcher_stack.current(),obj,cov::logic::GetLambda([&]{
-#define CASE_T(typ,obj) cov::logic::checkType<typ>();cov::logic::addMethod<typ>(cov::logic::switcher_stack.current(),obj,cov::logic::GetLambda([&]{
-#define DEFAULT cov::logic::switcher_stack.current()->addDefault(cov::logic::GetLambda([&]{
-#define BREAK }));
-
 // Covariant Tuple
 
 namespace cov {
@@ -1493,7 +1485,10 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs({args...})
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
+	{
+		args...
+	})
 	{
 		unpack_types<ArgTypes...>();
 	}
@@ -1593,6 +1588,12 @@ namespace cov {
 	public:
 		static constexpr bool value = match < _Tp, decltype(nullptr) > (nullptr);
 	};
+
+#ifndef COV_COMMON_FUNCTION_INDEX
+	template<typename T>
+	class function_index;
+#else
+	// 万能解决方案，非到万不得已最好别用
 	template<typename T>
 	class function_index {
 	public:
@@ -1600,6 +1601,7 @@ namespace cov {
 		static constexpr bool is_function_object=is_functional<T>::value;
 		typedef T type;
 		typedef void return_type;
+		typedef void(*common_type)();
 	private:
 		type function;
 	public:
@@ -1611,7 +1613,16 @@ namespace cov {
 			static_assert(is_function_object,"Target is not a function object.");
 			return function(args...);
 		}
+		template<typename...Args>
+		decltype(std::declval<type>()(std::declval<Args>()...))
+		operator()(Args&&...args)
+		{
+			static_assert(is_function_object,"Target is not a function object.");
+			return function(args...);
+		}
 	};
+#endif
+
 	template<typename _rT,typename...Args>
 	class function_index<_rT(*)(Args...)> {
 	public:
@@ -1619,11 +1630,16 @@ namespace cov {
 		static constexpr bool is_function_object=false;
 		typedef _rT(*type)(Args...);
 		typedef _rT return_type;
+		typedef _rT(*common_type)(Args...);
 	private:
 		type function;
 	public:
 		function_index(type func):function(func) {}
 		_rT call(Args&&...args)
+		{
+			return function(args...);
+		}
+		_rT operator()(Args&&...args)
 		{
 			return function(args...);
 		}
@@ -1635,6 +1651,7 @@ namespace cov {
 		static constexpr bool is_function_object=false;
 		typedef _rT(T::*type)(Args...);
 		typedef _rT return_type;
+		typedef _rT(*common_type)(Args...);
 	private:
 		T* object=nullptr;
 		type function;
@@ -1653,6 +1670,12 @@ namespace cov {
 				throw std::logic_error("Call member function with null pointer.");
 			return (this_ptr->*function)(args...);
 		}
+		_rT operator()(Args&&...args)
+		{
+			if(object==nullptr)
+				throw std::logic_error("Call member function with null pointer.");
+			return (object->*function)(args...);
+		}
 	};
 	template<typename T,typename _rT,typename...Args>
 	class function_index<_rT(T::*)(Args...) const> {
@@ -1661,6 +1684,7 @@ namespace cov {
 		static constexpr bool is_function_object=false;
 		typedef _rT(T::*type)(Args...) const;
 		typedef _rT return_type;
+		typedef _rT(*common_type)(Args...);
 	private:
 		const T* object=nullptr;
 		type function;
@@ -1678,6 +1702,12 @@ namespace cov {
 			if(this_ptr==nullptr)
 				throw std::logic_error("Call member function with null pointer.");
 			return (this_ptr->*function)(args...);
+		}
+		_rT operator()(Args&&...args)
+		{
+			if(object==nullptr)
+				throw std::logic_error("Call member function with null pointer.");
+			return (object->*function)(args...);
 		}
 	};
 	template<bool,typename>struct intelligent_infer_function;
@@ -1702,5 +1732,13 @@ namespace cov {
 		return intelligent_infer_function<is_functional<T>::value,T>::get(func);
 	}
 }
+
+#define SWITCH(obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher(obj));
+#define SWITCH_T(typ,obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher<typ>(obj));
+#define ENDSWITCH cov::logic::switcher_stack.current()->perform();cov::logic::switcher_stack.pop();});
+#define CASE(obj) cov::logic::addMethod(cov::logic::switcher_stack.current(),obj,cov::logic::GetLambda([&]{
+#define CASE_T(typ,obj) cov::logic::checkType<typ>();cov::logic::addMethod<typ>(cov::logic::switcher_stack.current(),obj,cov::logic::GetLambda([&]{
+#define DEFAULT cov::logic::switcher_stack.current()->addDefault(cov::logic::GetLambda([&]{
+#define BREAK }));
 
 #endif
