@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.08.01
+* Library Version: 2.16.08.02
 *
 * Function List:
 * Covariant Templates Toolbox
@@ -96,6 +96,17 @@ namespace cov {
 // Covariant Functions Toolbox
 
 namespace cov {
+template<typename _Tp>class function_base;
+	template<typename _rT,typename..._ArgsT>
+	class function_base<_rT(*)(_ArgsT...)>
+	{
+		public:
+		function_base()=default;
+		function_base(const function_base&)=default;
+		function_base(function_base&&)=default;
+		virtual ~function_base()=default;
+		virtual _rT call(_ArgsT&&...)=0;
+	};
 #ifndef COV_COMMON_FUNCTION_INDEX
 	template<typename T>
 	class function_index;
@@ -129,7 +140,7 @@ namespace cov {
 	};
 #endif /* #ifndef COV_COMMON_FUNCTION_INDEX */
 	template<typename _rT,typename...Args>
-	class function_index<_rT(*)(Args...)> {
+	class function_index<_rT(*)(Args...)>:public function_base<_rT(*)(Args...)> {
 	public:
 		static constexpr bool is_member_function=false;
 		static constexpr bool is_function_object=false;
@@ -140,7 +151,7 @@ namespace cov {
 		type function;
 	public:
 		function_index(type func):function(func) {}
-		_rT call(Args&&...args)
+		virtual _rT call(Args&&...args) override
 		{
 			return function(args...);
 		}
@@ -150,7 +161,7 @@ namespace cov {
 		}
 	};
 	template<typename T,typename _rT,typename...Args>
-	class function_index<_rT(T::*)(Args...)> {
+	class function_index<_rT(T::*)(Args...)>:public function_base<_rT(*)(Args...)> {
 	public:
 		static constexpr bool is_member_function=true;
 		static constexpr bool is_function_object=false;
@@ -163,13 +174,13 @@ namespace cov {
 	public:
 		function_index(type func):function(func) {}
 		function_index(T* ptr,type func):object(ptr),function(func) {}
-		_rT call(Args&&...args)
+		virtual _rT call(Args&&...args) override
 		{
 			if(object==nullptr)
 				throw std::logic_error("E0004");
 			return (object->*function)(args...);
 		}
-		_rT call(T* this_ptr,Args&&...args)
+		_rT _call(T* this_ptr,Args&&...args)
 		{
 			if(this_ptr==nullptr)
 				throw std::logic_error("E0004");
@@ -183,7 +194,7 @@ namespace cov {
 		}
 	};
 	template<typename T,typename _rT,typename...Args>
-	class function_index<_rT(T::*)(Args...) const> {
+	class function_index<_rT(T::*)(Args...) const>:public function_base<_rT(*)(Args...)> {
 	public:
 		static constexpr bool is_member_function=true;
 		static constexpr bool is_function_object=false;
@@ -196,13 +207,13 @@ namespace cov {
 	public:
 		function_index(type func):function(func) {}
 		function_index(const T* ptr,type func):object(ptr),function(func) {}
-		_rT call(Args&&...args)
+		virtual _rT call(Args&&...args) override
 		{
 			if(object==nullptr)
 				throw std::logic_error("E0004");
 			return (object->*function)(args...);
 		}
-		_rT call(const T* this_ptr,Args&&...args)
+		_rT _call(const T* this_ptr,Args&&...args)
 		{
 			if(this_ptr==nullptr)
 				throw std::logic_error("E0004");
@@ -226,12 +237,20 @@ namespace cov {
 		{
 			return function_index<real_type>(&func,&T::operator());
 		}
+		static function_index<real_type>* get_ptr(T func)
+		{
+			return new function_index<real_type>(&func,&T::operator());
+		}
 	};
 	template<typename T>struct intelligent_infer_function<false,T> {
 		typedef T real_type;
 		static function_index<real_type> get(T func)
 		{
 			return function_index<real_type>(func);
+		}
+		static function_index<real_type>* get_ptr(T func)
+		{
+			return new function_index<real_type>(func);
 		}
 	};
 	template<typename T>
@@ -240,6 +259,30 @@ namespace cov {
 	{
 		return intelligent_infer_function<is_functional<T>::value,T>::get(func);
 	}
+	template<typename T>
+	function_index<typename intelligent_infer_function<is_functional<T>::value,T>::real_type>*
+	make_function_index_ptr(T func)
+	{
+		return intelligent_infer_function<is_functional<T>::value,T>::get_ptr(func);
+	}
+	template<typename _Tp> class function;
+	template<typename _rT,typename...ArgsT>
+	class function<_rT(ArgsT...)> final
+	{
+		function_base<_rT(*)(ArgsT...)>* __f_=nullptr;
+		public:
+		function()=delete;
+		template<typename _Tp>function(_Tp __f)
+		{
+			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_index<typename intelligent_infer_function<is_functional<_Tp>::value,_Tp>::real_type>::common_type>::value,"E000B");
+			__f_=make_function_index_ptr(__f);
+		}
+		~function(){delete __f_;}
+		_rT operator()(ArgsT&&...args)
+		{
+			return __f_->call(std::forward<ArgsT>(args)...);
+		}
+	};
 }
 
 // Covariant Any
