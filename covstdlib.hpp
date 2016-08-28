@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.08.03
+* Library Version: 2.16.08.04
 *
 * Function List:
 * Covariant Templates Toolbox
@@ -255,7 +255,7 @@ namespace cov {
 	class function<_rT(ArgsT...)> final {
 		function_base<_rT(*)(ArgsT...)>* __f_=nullptr;
 	public:
-		function()=delete;
+		function()=default;
 		template<typename _Tp> explicit function(_Tp __f)
 		{
 			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_index<typename intelligent_infer_function<is_functional<_Tp>::value,_Tp>::real_type>::common_type>::value,"E000B");
@@ -277,8 +277,14 @@ namespace cov {
 		{
 			delete __f_;
 		}
+		bool callable() const
+		{
+			return __f_!=nullptr;
+		}
 		_rT operator()(ArgsT&&...args)
 		{
+			if(!callable())
+				throw std::logic_error("E0005");
 			return __f_->call(std::forward<ArgsT>(args)...);
 		}
 		template<typename _Tp> function& operator=(_Tp __f)
@@ -1105,77 +1111,44 @@ std::chrono::time_point < std::chrono::high_resolution_clock > cov::timer::m_tim
 
 namespace cov {
 	namespace logic {
-		class baseFunction {
-		public:
-			baseFunction() = default;
-			virtual ~ baseFunction()
-			{
-			}
-			virtual void perform() = 0;
-		};
 		class baseSwitcher {
 		public:
 			baseSwitcher() = default;
 			virtual ~ baseSwitcher()
 			{
 			}
-			virtual void addDefault(baseFunction *) = 0;
+			virtual void addDefault(cov::function<void()>&&) = 0;
 			virtual const std::type_info & typeinf() = 0;
 			virtual void perform() = 0;
-		};
-		template < typename T > class lambdaBlock final:public baseFunction {
-		protected:
-			T mLambda;
-		public:
-			lambdaBlock() = delete;
-			lambdaBlock(T lamb):mLambda(lamb)
-			{
-				static_assert(is_functional<T>::value,"E0003");
-				static_assert(is_received<function_index<typename intelligent_infer_function<is_functional<T>::value,T>::real_type>>::value,"E000A");
-			}
-			virtual void perform()
-			{
-				mLambda();
-			}
 		};
 		template < typename T > class switcher final:public baseSwitcher {
 		protected:
 			const T & mCondition;
-			baseFunction *mDefault = nullptr;
-			std::map < const T, baseFunction * >mcases;
+			cov::function<void()> mDefault;
+			std::map < const T, cov::function<void()> >mcases;
 		public:
 			switcher() = delete;
-			switcher(const T & condition):mCondition(condition)
+			switcher(const T & condition):mCondition(condition){}
+			virtual ~ switcher(){}
+			void addDefault(cov::function<void()>&& func) override
 			{
-			}
-			virtual ~ switcher()
-			{
-				for (auto & it:mcases)
-					delete it.second;
-			}
-			void addDefault(baseFunction * lambda) override
-			{
-				if (mDefault != nullptr)
-					delete mDefault;
-				mDefault = lambda;
+				mDefault = func;
 			}
 			const std::type_info & typeinf() override
 			{
 				return typeid(T);
 			}
-			void addMethod(const T & lable, baseFunction * lambda)
+			void addMethod(const T & lable, cov::function<void()>&& func)
 			{
-				if (mcases.find(lable) != mcases.end())
-					delete mcases[lable];
-				mcases[lable] = lambda;
+				mcases[lable] = func;
 			}
 			void perform() override
 			{
 				if (mcases.find(mCondition) == mcases.end()) {
-					if (mDefault != nullptr)
-						mDefault->perform();
+					if (mDefault.callable())
+						mDefault();
 				} else
-					mcases[mCondition]->perform();
+					mcases[mCondition]();
 			}
 		};
 		class switches final {
@@ -1208,20 +1181,16 @@ namespace cov {
 			if(typeid(T) != current_switcher_type)
 				throw std::logic_error("E0006");
 		}
-		template < typename T > lambdaBlock < T > *GetLambda(T lamb)
-		{
-			return new lambdaBlock < T > (lamb);
-		}
 		template < typename T > baseSwitcher * GetSwitcher(const T & condition)
 		{
 			return new switcher < T > (condition);
 		}
-		template < typename T > void addMethod(baseSwitcher * ptr, const T & obj,baseFunction * lambda)
+		template < typename T > void addMethod(baseSwitcher * ptr, const T & obj,cov::function<void()>&& func)
 		{
 			checkType < T > ();
 			switcher < T > *s = dynamic_cast < switcher < T > *>(ptr);
 			if (s != nullptr)
-				s->addMethod(obj, lambda);
+				s->addMethod(obj, std::forward<cov::function<void()>>(func));
 		}
 		template < typename T > void runSwitcher(const T & switches)
 		{
@@ -1232,12 +1201,12 @@ namespace cov {
 		{
 			return new switcher < std::string > (str);
 		}
-		void addMethod(baseSwitcher * ptr, const char *str, baseFunction * lambda)
+		void addMethod(baseSwitcher * ptr, const char *str, cov::function<void()>&& func)
 		{
 			checkType < std::string > ();
 			switcher < std::string > *s = dynamic_cast < switcher < std::string > *>(ptr);
 			if (s != nullptr)
-				s->addMethod(std::string(str), lambda);
+				s->addMethod(std::string(str), std::forward<cov::function<void()>>(func));
 		}
 	}
 }
@@ -1379,9 +1348,9 @@ public:
 #define Switch(obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher(obj));
 #define Switch_(typ,obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher<typ>(obj));
 #define EndSwitch cov::logic::switcher_stack.current()->perform();cov::logic::switcher_stack.pop();});
-#define Case(obj) cov::logic::addMethod(cov::logic::switcher_stack.current(),obj,cov::logic::GetLambda([&]{
-#define Case_(typ,obj) cov::logic::checkType<typ>();cov::logic::addMethod<typ>(cov::logic::switcher_stack.current(),obj,cov::logic::GetLambda([&]{
-#define Default cov::logic::switcher_stack.current()->addDefault(cov::logic::GetLambda([&]{
+#define Case(obj) cov::logic::addMethod(cov::logic::switcher_stack.current(),obj,cov::function<void()>([&]{
+#define Case_(typ,obj) cov::logic::checkType<typ>();cov::logic::addMethod<typ>(cov::logic::switcher_stack.current(),obj,cov::function<void()>([&]{
+#define Default cov::logic::switcher_stack.current()->addDefault(cov::function<void()>([&]{
 #define EndCase }));
 
 #endif /* #ifndef __cplusplus */
