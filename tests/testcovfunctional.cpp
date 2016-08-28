@@ -8,10 +8,14 @@ int fff(const char* str)
 }
 int main(int args,char** argv)
 {
-	auto f=[](const char* str){
-		std::cout<<str<<std::endl;
-		//return 0;
+	std::string str=",World!";
+	auto f=[&](const char* s) {
+		std::cout<<s<<str<<std::endl;
+		return 0;
 	};
 	cov::function<int(const char*)> func(f);
-	return func("Hello");
+	func("Hello");
+	func=fff;
+	func("Hello");
+	return 0;
 }
