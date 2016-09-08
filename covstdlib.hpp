@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.08.04
+* Library Version: 2.16.09.01
 *
 * Function List:
 * Covariant Templates Toolbox
@@ -107,6 +107,26 @@ namespace cov {
 		virtual function_base* copy() const=0;
 		virtual _rT call(_ArgsT&&...) const=0;
 	};
+	template<typename _rT,typename _Tp,typename..._ArgsT>
+	class function_base<_rT(_Tp::*)(_ArgsT...)> {
+	public:
+		function_base()=default;
+		function_base(const function_base&)=default;
+		function_base(function_base&&)=default;
+		virtual ~function_base()=default;
+		virtual function_base* _copy() const=0;
+		virtual _rT _call(_Tp*,_ArgsT&&...) const=0;
+	};
+	template<typename _rT,typename _Tp,typename..._ArgsT>
+	class function_base<_rT(_Tp::*)(_ArgsT...) const> {
+	public:
+		function_base()=default;
+		function_base(const function_base&)=default;
+		function_base(function_base&&)=default;
+		virtual ~function_base()=default;
+		virtual function_base* _copy() const=0;
+		virtual _rT _call(const _Tp*,_ArgsT&&...) const=0;
+	};
 #ifndef COV_COMMON_FUNCTION_INDEX
 	template<typename T>
 	class function_index;
@@ -165,7 +185,9 @@ namespace cov {
 		}
 	};
 	template<typename T,typename _rT,typename...Args>
-	class function_index<_rT(T::*)(Args...)>:public function_base<_rT(*)(Args...)> {
+	class function_index<_rT(T::*)(Args...)>:
+		public function_base<_rT(*)(Args...)>,
+		public function_base<_rT(T::*)(Args...)> {
 	public:
 		static constexpr bool is_member_function=true;
 		static constexpr bool is_function_object=false;
@@ -173,26 +195,52 @@ namespace cov {
 		typedef _rT return_type;
 		typedef _rT(*common_type)(Args...);
 	private:
-		T object;
+		mutable T* object=nullptr;
 		type function;
 	public:
 		function_index(type func):function(func) {}
-		function_index(T obj,type func):object(obj),function(func) {}
+		function_index(T obj,type func):object(new T(obj)),function(func) {}
+		virtual ~function_index()
+		{
+			delete object;
+		}
 		virtual _rT call(Args&&...args) const override
 		{
-			return (object.*function)(std::forward<Args>(args)...);
+			if(object==nullptr)
+				throw std::logic_error("E0005");
+			return (object->*function)(std::forward<Args>(args)...);
+		}
+		virtual _rT _call(T* this_ptr,Args&&...args) const override
+		{
+			if(this_ptr==nullptr)
+				throw std::logic_error("E0005");
+			return (this_ptr->*function)(std::forward<Args>(args)...);
 		}
 		virtual function_base<common_type>* copy() const override
 		{
-			return new function_index(object,function);
+			if(object==nullptr)
+				return new function_index(function);
+			else
+				return new function_index(*object,function);
+		}
+		virtual function_base<_rT(T::*)(Args...)>* _copy() const override
+		{
+			if(object==nullptr)
+				return new function_index(function);
+			else
+				return new function_index(*object,function);
 		}
 		_rT operator()(Args&&...args)
 		{
-			return (object.*function)(std::forward<Args>(args)...);
+			if(object==nullptr)
+				throw std::logic_error("E0005");
+			return (object->*function)(std::forward<Args>(args)...);
 		}
 	};
 	template<typename T,typename _rT,typename...Args>
-	class function_index<_rT(T::*)(Args...) const>:public function_base<_rT(*)(Args...)> {
+	class function_index<_rT(T::*)(Args...) const>:
+			public function_base<_rT(*)(Args...)>,
+			public function_base<_rT(T::*)(Args...) const> {
 	public:
 		static constexpr bool is_member_function=true;
 		static constexpr bool is_function_object=false;
@@ -200,21 +248,42 @@ namespace cov {
 		typedef _rT return_type;
 		typedef _rT(*common_type)(Args...);
 	private:
-		T object;
+		const T* object=nullptr;
 		type function;
 	public:
-		function_index(T obj,type func):object(obj),function(func) {}
+		function_index(type func):function(func) {}
+		function_index(T obj,type func):object(new T(obj)),function(func) {}
+		virtual ~function_index()
+		{
+			delete object;
+		}
 		virtual _rT call(Args&&...args) const override
 		{
-			return (object.*function)(std::forward<Args>(args)...);
+			return (object->*function)(std::forward<Args>(args)...);
+		}
+		virtual _rT _call(const T* this_ptr,Args&&...args) const override
+		{
+			return (this_ptr->*function)(std::forward<Args>(args)...);
 		}
 		virtual function_base<common_type>* copy() const override
 		{
-			return new function_index(object,function);
+			if(object==nullptr)
+				return new function_index(function);
+			else
+				return new function_index(*object,function);
+		}
+		virtual function_base<_rT(T::*)(Args...) const>* _copy() const override
+		{
+			if(object==nullptr)
+				return new function_index(function);
+			else
+				return new function_index(*object,function);
 		}
 		_rT operator()(Args&&...args)
 		{
-			return (object.*function)(std::forward<Args>(args)...);
+			if(object==nullptr)
+				throw std::logic_error("E0005");
+			return (object->*function)(std::forward<Args>(args)...);
 		}
 	};
 	template<typename T,typename...Args> struct is_received;
@@ -311,6 +380,134 @@ namespace cov {
 					throw std::logic_error("E0005");
 				delete __f_;
 				__f_=func.__f_->copy();
+			}
+			return *this;
+		}
+	};
+	template<typename _rT,typename _T,typename...ArgsT>
+	class function<_rT(_T::*)(ArgsT...)> final {
+		function_base<_rT(_T::*)(ArgsT...)>* __f_=nullptr;
+	public:
+		function()=default;
+		template<typename _Tp> explicit function(_Tp __f)
+		{
+			static_assert(is_same_type<_rT(_T::*)(ArgsT...),typename function_index<typename intelligent_infer_function<is_functional<_Tp>::value,_Tp>::type>::common_type>::value,"E000B");
+			__f_=intelligent_infer_function<is_functional<_Tp>::value,_Tp>::get_ptr(std::forward<_Tp>(__f));
+		}
+		function(const function& func)
+		{
+			if(func.__f_==nullptr)
+				throw std::logic_error("E0005");
+			__f_=func.__f_->_copy();
+		}
+		function(function&& func)
+		{
+			if(func.__f_==nullptr)
+				throw std::logic_error("E0005");
+			__f_=func.__f_->_copy();
+		}
+		~function()
+		{
+			delete __f_;
+		}
+		bool callable() const
+		{
+			return __f_!=nullptr;
+		}
+		_rT operator()(_T* this_ptr,ArgsT&&...args)
+		{
+			if(!callable())
+				throw std::logic_error("E0005");
+			return __f_->_call(this_ptr,std::forward<ArgsT>(args)...);
+		}
+		template<typename _Tp> function& operator=(_Tp __f)
+		{
+			static_assert(is_same_type<_rT(_T::*)(ArgsT...),typename function_index<typename intelligent_infer_function<is_functional<_Tp>::value,_Tp>::type>::common_type>::value,"E000B");
+			delete __f_;
+			__f_=intelligent_infer_function<is_functional<_Tp>::value,_Tp>::get_ptr(std::forward<_Tp>(__f));
+			return *this;
+		}
+		function& operator=(const function& func)
+		{
+			if(this!=&func) {
+				if(func.__f_==nullptr)
+					throw std::logic_error("E0005");
+				delete __f_;
+				__f_=func.__f_->_copy();
+			}
+			return *this;
+		}
+		function& operator=(function&& func)
+		{
+			if(this!=&func) {
+				if(func.__f_==nullptr)
+					throw std::logic_error("E0005");
+				delete __f_;
+				__f_=func.__f_->_copy();
+			}
+			return *this;
+		}
+	};
+	template<typename _rT,typename _T,typename...ArgsT>
+	class function<_rT(_T::*)(ArgsT...) const> final {
+		function_base<_rT(_T::*)(ArgsT...) const>* __f_=nullptr;
+	public:
+		function()=default;
+		template<typename _Tp> explicit function(_Tp __f)
+		{
+			static_assert(is_same_type<_rT(_T::*)(ArgsT...) const,typename function_index<typename intelligent_infer_function<is_functional<_Tp>::value,_Tp>::real_type>::type>::value,"E000B");
+			__f_=intelligent_infer_function<is_functional<_Tp>::value,_Tp>::get_ptr(std::forward<_Tp>(__f));
+		}
+		function(const function& func)
+		{
+			if(func.__f_==nullptr)
+				throw std::logic_error("E0005");
+			__f_=func.__f_->_copy();
+		}
+		function(function&& func)
+		{
+			if(func.__f_==nullptr)
+				throw std::logic_error("E0005");
+			__f_=func.__f_->_copy();
+		}
+		~function()
+		{
+			delete __f_;
+		}
+		bool callable() const
+		{
+			return __f_!=nullptr;
+		}
+		_rT operator()(const _T* this_ptr,ArgsT&&...args)
+		{
+			if(!callable())
+				throw std::logic_error("E0005");
+			return __f_->_call(this_ptr,std::forward<ArgsT>(args)...);
+		}
+		template<typename _Tp> function& operator=(_Tp __f)
+		{
+			static_assert(is_same_type<_rT(_T::*)(ArgsT...) const,typename function_index<typename intelligent_infer_function<is_functional<_Tp>::value,_Tp>::real_type>::type>::value,"E000B");
+			delete __f_;
+			__f_=intelligent_infer_function<is_functional<_Tp>::value,_Tp>::get_ptr(std::forward<_Tp>(__f));
+			return *this;
+		}
+		function& operator=(const function& func)
+		{
+			if(this!=&func) {
+				if(func.__f_==nullptr)
+					throw std::logic_error("E0005");
+				delete __f_;
+				__f_=func.__f_->_copy();
+			}
+			return *this;
+		}
+		function& operator=(function&& func)
+		{
+			if(this!=&func) {
+				if(func.__f_==nullptr)
+					throw std::logic_error("E0005");
+				delete __f_;
+				__f_=func.__f_->_copy();
 			}
 			return *this;
 		}
@@ -1128,8 +1325,8 @@ namespace cov {
 			std::map < const T, cov::function<void()> >mcases;
 		public:
 			switcher() = delete;
-			switcher(const T & condition):mCondition(condition){}
-			virtual ~ switcher(){}
+			switcher(const T & condition):mCondition(condition) {}
+			virtual ~ switcher() {}
 			void addDefault(cov::function<void()>&& func) override
 			{
 				mDefault = func;
