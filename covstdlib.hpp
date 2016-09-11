@@ -239,8 +239,8 @@ namespace cov {
 	};
 	template<typename T,typename _rT,typename...Args>
 	class function_index<_rT(T::*)(Args...) const>:
-			public function_base<_rT(*)(Args...)>,
-			public function_base<_rT(T::*)(Args...) const> {
+		public function_base<_rT(*)(Args...)>,
+		public function_base<_rT(T::*)(Args...) const> {
 	public:
 		static constexpr bool is_member_function=true;
 		static constexpr bool is_function_object=false;
@@ -518,13 +518,9 @@ namespace cov {
 
 class cov::any final {
 public:
-	template < typename T > static std::string toString(const T & val)
+	template < typename T > static std::string toString(const T &)
 	{
-		std::string str;
-		std::stringstream ss;
-		ss << val;
-		ss >> str;
-		return std::move(str);
+		throw std::logic_error("E000D");
 	}
 private:
 	class baseHolder {
@@ -571,7 +567,7 @@ private:
 		}
 		const T & data() const
 		{
-			return this->data();
+			return mDat;
 		}
 		void data(const T & dat)
 		{
@@ -633,7 +629,7 @@ public:
 			throw std::logic_error("E0006");
 		if(this->mDat == nullptr)
 			throw std::logic_error("E0005");
-		return dynamic_cast < holder < T > *>(this->mDat)->data();
+		return dynamic_cast < const holder < T > *>(this->mDat)->data();
 	}
 	template < typename T > operator T&()
 	{
@@ -657,6 +653,39 @@ public:
 		return *this;
 	}
 };
+
+namespace cov {
+	template<> std::string cov::any::toString<std::string>(const std::string& str)
+	{
+		return std::move(str);
+	}
+	template<> std::string cov::any::toString<int>(const int& i)
+	{
+		std::string str;
+		std::stringstream ss;
+		ss<<i;
+		ss>>str;
+		return std::move(str);
+	}
+
+	template<> std::string cov::any::toString<float>(const float& i)
+	{
+		std::string str;
+		std::stringstream ss;
+		ss<<i;
+		ss>>str;
+		return std::move(str);
+	}
+
+	template<> std::string cov::any::toString<double>(const double& i)
+	{
+		std::string str;
+		std::stringstream ss;
+		ss<<i;
+		ss>>str;
+		return std::move(str);
+	}
+}
 
 std::ostream& operator<<(std::ostream& out,const cov::any& val)
 {
@@ -1249,7 +1278,7 @@ class cov::timer final {
 public:
 	typedef unsigned long timer_t;
 	enum class time_unit {
-		nano_sec, micro_sec, milli_sec, second, minute
+	    nano_sec, micro_sec, milli_sec, second, minute
 	};
 	static void reset()
 	{
@@ -1461,8 +1490,7 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
-	{
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs( {
 		args...
 	})
 	{
