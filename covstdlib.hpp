@@ -350,7 +350,7 @@ namespace cov {
 		{
 			return __f_!=nullptr;
 		}
-		_rT operator()(ArgsT&&...args)
+		_rT operator()(ArgsT&&...args) const
 		{
 			if(!callable())
 				throw std::logic_error("E0005");
@@ -414,7 +414,7 @@ namespace cov {
 		{
 			return __f_!=nullptr;
 		}
-		_rT operator()(_T* this_ptr,ArgsT&&...args)
+		_rT operator()(_T* this_ptr,ArgsT&&...args) const
 		{
 			if(!callable())
 				throw std::logic_error("E0005");
