@@ -1,4 +1,4 @@
-#include "covstdlib.hpp"
+#include "covfunctional.hpp"
 #include <iostream>
 #include <string>
 int fff(const char* str)
@@ -8,7 +8,7 @@ int fff(const char* str)
 }
 struct fack_func {
 	int a=10;
-	int operator()(const char* str)
+	int operator()(const char* str) const
 	{
 		std::cout<<typeid(*this).name()<<"|"<<str<<std::endl;
 		return 0;
@@ -22,6 +22,10 @@ struct fack_func {
 		std::cout<<a*2<<"|"<<str<<std::endl;
 	}
 };
+template<typename _Tp,typename _rT,typename..._ArgsT> cov::function<_rT(_ArgsT...)> getfunc(const _Tp& f)
+{
+	return std::move(cov::function<_rT(_ArgsT...)>(f));
+}
 int main(int args,char** argv)
 {
 	std::string str=",World!";
@@ -31,7 +35,7 @@ int main(int args,char** argv)
 		std::cout<<s<<str<<std::endl;
 		return 0;
 	};
-	cov::function<int(const char*)> func(f);
+	auto func=getfunc<decltype(f),int,const char*>(f);
 	cov::function<int(fack_func&,const char*)> mfunc(&fack_func::func);
 	func("Hello");
 	func=fff;

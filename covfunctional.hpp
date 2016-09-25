@@ -155,7 +155,7 @@ namespace cov {
 		mutable _Tp object;
 		type function;
 	public:
-		executor_index(_Tp obj):object(obj),function(&_Tp::operator()) {}
+		executor_index(const _Tp& obj):object(obj),function(&_Tp::operator()) {}
 		virtual ~executor_index()=default;
 		virtual _rT call(_ArgsT&&...args) const override
 		{
@@ -175,7 +175,7 @@ namespace cov {
 		const _Tp object;
 		type function;
 	public:
-		executor_index(const _Tp obj):object(obj),function(&_Tp::operator()) {}
+		executor_index(const _Tp& obj):object(obj),function(&_Tp::operator()) {}
 		virtual ~executor_index()=default;
 		virtual _rT call(_ArgsT&&...args) const override
 		{
@@ -188,33 +188,33 @@ namespace cov {
 	};
 	template<typename _Tp>struct function_resolver<true,_Tp> {
 		typedef executor_index<decltype(&_Tp::operator())> type;
-		static type make(_Tp f)
+		static type make(const _Tp& f)
 		{
 			return executor_index<decltype(&_Tp::operator())>(f);
 		}
-		static type* make_ptr(_Tp f)
+		static type* make_ptr(const _Tp& f)
 		{
 			return new executor_index<decltype(&_Tp::operator())>(f);
 		}
 	};
 	template<typename _Tp>struct function_resolver<false,_Tp> {
 		typedef function_index<_Tp> type;
-		static type make(_Tp f)
+		static type make(const _Tp& f)
 		{
 			return function_index<_Tp>(f);
 		}
-		static type* make_ptr(_Tp f)
+		static type* make_ptr(const _Tp& f)
 		{
 			return new function_index<_Tp>(f);
 		}
 	};
 	template<typename _Tp> struct function_parser {
 		typedef typename function_resolver<is_functional<_Tp>::value,_Tp>::type type;
-		static type make_func(_Tp f)
+		static type make_func(const _Tp& f)
 		{
 			return function_resolver<is_functional<_Tp>::value,_Tp>::make(f);
 		}
-		static type* make_func_ptr(_Tp f)
+		static type* make_func_ptr(const _Tp& f)
 		{
 			return function_resolver<is_functional<_Tp>::value,_Tp>::make_ptr(f);
 		}
@@ -224,8 +224,17 @@ namespace cov {
 	class function<_rT(ArgsT...)> final {
 		function_base<_rT(*)(ArgsT...)>* mFunc=nullptr;
 	public:
+		bool callable() const
+		{
+			return mFunc!=nullptr;
+		}
+		void swap(function&& func) noexcept {
+			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
+			mFunc=func.mFunc;
+			func.mFunc=tmp;
+		}
 		function()=default;
-		template<typename _Tp> explicit function(_Tp func)
+		template<typename _Tp> explicit function(const _Tp& func)
 		{
 			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
@@ -237,20 +246,12 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func)
-		{
-			if(func.mFunc==nullptr)
-				mFunc=func.mFunc;
-			else
-				mFunc=func.mFunc->copy();
+		function(function&& func) noexcept {
+			swap(std::forward<function>(func));
 		}
 		~function()
 		{
 			delete mFunc;
-		}
-		bool callable() const
-		{
-			return mFunc!=nullptr;
 		}
 		_rT call(ArgsT&&...args) const
 		{
@@ -285,11 +286,7 @@ namespace cov {
 		function& operator=(function&& func)
 		{
 			if(this!=&func) {
-				delete mFunc;
-				if(func.mFunc==nullptr)
-					mFunc=func.mFunc;
-				else
-					mFunc=func.mFunc->copy();
+				swap(std::forward<function>(func));
 			}
 			return *this;
 		}
