@@ -13,11 +13,11 @@ struct fack_func {
 		std::cout<<typeid(*this).name()<<"|"<<str<<std::endl;
 		return 0;
 	}
-	int func(const char* str) const
+	int func(const char* str)
 	{
 		std::cout<<a<<"|"<<str<<std::endl;
 	}
-	int ffunc(const char* str) const
+	int ffunc(const char* str)
 	{
 		std::cout<<a*2<<"|"<<str<<std::endl;
 	}
@@ -32,14 +32,14 @@ int main(int args,char** argv)
 		return 0;
 	};
 	cov::function<int(const char*)> func(f);
-	cov::function<int(fack_func::*)(const char*) const> mfunc(&fack_func::func);
+	cov::function<int(fack_func&,const char*)> mfunc(&fack_func::func);
 	func("Hello");
 	func=fff;
 	func("Hello");
 	func=ffunc;
 	func("Hello");
-	mfunc(&ffunc,"Hello");
+	mfunc(ffunc,"Hello");
 	mfunc=&fack_func::ffunc;
-	mfunc(&ffunc,"Hello");
+	mfunc(ffunc,"Hello");
 	return 0;
 }
