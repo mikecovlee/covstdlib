@@ -20,11 +20,20 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.09.02
-*
+* Library Version: 2.16.09.03
 */
+
+#ifndef __cplusplus
+#error E0001
+#else
+
+#if __cplusplus < 201300L
+#error E0002
+#else
+
 #include <stdexcept>
 #include <utility>
+
 namespace cov {
 
 	template<typename> class function;
@@ -292,3 +301,6 @@ namespace cov {
 		return function_container<_Tp>(func);
 	}
 }
+
+#endif /* #ifndef __cplusplus */
+#endif /* #if __cplusplus < 201300L */
