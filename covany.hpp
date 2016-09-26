@@ -1,4 +1,4 @@
-#pragma once
+//#pragma once
 /*
 * Covariant C++ Library(2nd Generation) -- Any
 *
@@ -38,13 +38,7 @@
 #include <stdexcept>
 
 namespace cov {
-	class cov::any final {
-	public:
-		template < typename T > static std::string toString(const T &)
-		{
-			throw std::logic_error("E000D");
-		}
-	private:
+	class any final {
 		class baseHolder {
 		public:
 			baseHolder() = default;
@@ -52,7 +46,7 @@ namespace cov {
 			virtual const std::type_info & type() const = 0;
 			virtual baseHolder *duplicate() = 0;
 			virtual bool compare(const baseHolder *) const = 0;
-			virtual std::string toString() const = 0;
+			virtual std::string to_string() const = 0;
 		};
 		template < typename T > class holder final:public baseHolder {
 		protected:
@@ -73,15 +67,13 @@ namespace cov {
 			{
 				if (obj->type() == this->type()) {
 					const holder < T > *ptr = dynamic_cast < const holder < T > *>(obj);
-					if (ptr == nullptr)
-						return false;
-					return mDat == ptr->data();
-				} else
-					return false;
+					return ptr!=nullptr?mDat == ptr->data():false;
+				}
+				return false;
 			}
-			virtual std::string toString() const override
+			virtual std::string to_string() const override
 			{
-				return std::move(any::toString(mDat));
+				return std::move(std::to_string(mDat));
 			}
 			T & data()
 			{
@@ -98,44 +90,58 @@ namespace cov {
 		};
 		baseHolder * mDat;
 	public:
+		void swap(any& obj) noexcept {
+			baseHolder* tmp=this->mDat;
+			this->mDat=obj.mDat;
+			obj.mDat=tmp;
+		}
+		void swap(any&& obj) noexcept {
+			baseHolder* tmp=this->mDat;
+			this->mDat=obj.mDat;
+			obj.mDat=tmp;
+		}
+		bool usable() const noexcept
+		{
+			return mDat != nullptr;
+		}
 		any():mDat(nullptr) {}
 		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
-		any(const any & v):mDat(v.mDat->duplicate()) {}
-		any(any&& v):mDat(v.mDat->duplicate()) {}
+		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
+		any(any&& v) noexcept { swap(std::forward<any>(v)); }
 		~any()
 		{
 			delete mDat;
 		}
-		bool empty() const
-		{
-			return mDat != nullptr;
-		}
 		const std::type_info & type() const
 		{
-			if (this->mDat != nullptr)
-				return this->mDat->type();
-			else
-				return typeid(void);
+			return this->mDat != nullptr?this->mDat->type():typeid(void);
 		}
-		std::string toString() const
+		std::string to_string() const
 		{
 			if(this->mDat == nullptr)
 				throw std::logic_error("E0005");
-			return std::move(this->mDat->toString());
+			return std::move(this->mDat->to_string());
 		}
 		any & operator=(const any & var)
 		{
-			delete mDat;
-			mDat = var.mDat->duplicate();
+			if(&var!=this) {
+				delete mDat;
+				mDat = var.usable()?var.mDat->duplicate():nullptr;
+			}
+			return *this;
+		}
+		any & operator=(any&& var) noexcept {
+			if(&var!=this)
+				swap(std::forward<any>(var));
 			return *this;
 		}
 		bool operator==(const any & var) const
 		{
-			return this->mDat->compare(var.mDat);
+			return usable()?this->mDat->compare(var.mDat):!var.usable();
 		}
 		bool operator!=(const any & var)const
 		{
-			return !this->mDat->compare(var.mDat);
+			return usable()?!this->mDat->compare(var.mDat):var.usable();
 		}
 		template < typename T > T & val()
 		{
@@ -163,11 +169,8 @@ namespace cov {
 		}
 		template < typename T > void assign(const T & dat)
 		{
-			if (typeid(T) != this->type() || this->mDat == nullptr) {
-				delete mDat;
-				mDat = new holder < T > (dat);
-			}
-			return dynamic_cast < holder < T > *>(mDat)->data(dat);
+			delete mDat;
+			mDat = new holder < T > (dat);
 		}
 		template < typename T > any & operator=(const T & dat)
 		{
@@ -179,7 +182,7 @@ namespace cov {
 
 std::ostream& operator<<(std::ostream& out,const cov::any& val)
 {
-	out<<val.toString();
+	out<<val.to_string();
 	return out;
 }
 
