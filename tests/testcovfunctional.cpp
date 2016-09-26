@@ -36,7 +36,9 @@ int main(int args,char** argv)
 		return 0;
 	};
 	auto func=getfunc<decltype(f),int,const char*>(f);
+	auto fc=cov::make_function_container(f);
 	cov::function<int(fack_func&,const char*)> mfunc(&fack_func::func);
+	fc.call("Hi");
 	func("Hello");
 	func=fff;
 	func("Hello");

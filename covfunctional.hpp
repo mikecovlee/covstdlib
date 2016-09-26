@@ -29,6 +29,7 @@ namespace cov {
 
 	template<typename> class function;
 	template<typename> class function_base;
+	template<typename> class function_container;
 	template<typename> class function_index;
 	template<typename> class executor_index;
 	template<typename> struct function_parser;
@@ -69,27 +70,17 @@ namespace cov {
 		virtual function_base* copy() const=0;
 		virtual _rT call(_ArgsT&&...) const=0;
 	};
-#ifdef COV_COMMON_FUNCTION_INDEX
-	template<typename T> class function_index {
-		type function;
+	template<typename _Tp> class function_container {
+		_Tp function;
 	public:
-		function_index(type func):function(func) {}
-		template<typename...Args>
-		decltype(std::declval<type>()(std::declval<Args>()...))
-		call(Args&&...args)
+		function_container(_Tp func):function(func) {}
+		template<typename..._ArgsT>
+		decltype(std::declval<_Tp>()(std::declval<_ArgsT>()...))
+		call(_ArgsT&&...args)
 		{
-			static_assert(is_function_object,"E0003");
-			return function(args...);
-		}
-		template<typename...Args>
-		decltype(std::declval<type>()(std::declval<Args>()...))
-		operator()(Args&&...args)
-		{
-			static_assert(is_function_object,"E0003");
-			return function(args...);
+			return function(std::forward<_ArgsT>(args)...);
 		}
 	};
-#endif /* #ifndef COV_COMMON_FUNCTION_INDEX */
 	template<typename _rT,typename...Args>
 	class function_index<_rT(*)(Args...)>:public function_base<_rT(*)(Args...)> {
 	public:
@@ -236,7 +227,9 @@ namespace cov {
 		function()=default;
 		template<typename _Tp> explicit function(const _Tp& func)
 		{
-			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
+			static_assert(is_same_type<_rT(*)(ArgsT...),
+			              typename function_parser<_Tp>::type::common_type
+			              >::value,"E000B");
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
 		}
 		function(const function& func)
@@ -267,7 +260,9 @@ namespace cov {
 		}
 		template<typename _Tp> function& operator=(_Tp func)
 		{
-			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
+			static_assert(is_same_type<_rT(*)(ArgsT...),
+			              typename function_parser<_Tp>::type::common_type
+			              >::value,"E000B");
 			delete mFunc;
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
 			return *this;
@@ -291,4 +286,9 @@ namespace cov {
 			return *this;
 		}
 	};
+	template<typename _Tp> function_container<_Tp>
+	make_function_container(_Tp func)
+	{
+		return function_container<_Tp>(func);
+	}
 }
