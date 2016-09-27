@@ -20,12 +20,11 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.09.02
+* Library Version: 2.16.10
 *
 * Function List:
-* Covariant Templates Toolbox
-* Covariant Functional
-* cov::any
+* Covariant Functional(New)
+* cov::any(New)
 * cov::list
 * cov::tuple
 * cov::timer
@@ -33,37 +32,45 @@
 * cov::argument_list
 *
 * Marco List:
-* COV_COMMON_FUNCTION_INDEX
+* Library Version: __covcpplib
 */
 #ifndef __cplusplus
 #error E0001
-#else
+#endif
 
 #if __cplusplus < 201300L
 #error E0002
-#else
+#endif
+
+#define __covcpplib 201610L
 
 #include <map>
 #include <deque>
+#include <string>
 #include <thread>
 #include <chrono>
 #include <memory>
-#include <string>
 #include <utility>
-#include <sstream>
 #include <ostream>
 #include <typeinfo>
 #include <stdexcept>
 #include <typeindex>
 
 namespace cov {
+	template<typename> class function;
+	template<typename> class function_base;
+	template<typename> class function_container;
+	template<typename> class function_index;
+	template<typename> class executor_index;
+	template<typename> struct function_parser;
+	template<bool,typename> struct function_resolver;
 	class any;
 	class timer;
 	class argument_list;
 	template < typename > class list;
 }
 
-// Covariant Templates Toolbox
+// Covariant Functional
 
 namespace cov {
 	template < typename T, typename X > struct is_same_type {
@@ -79,30 +86,18 @@ namespace cov {
 		static constexpr bool value=true;
 	};
 	template < typename _Tp > class is_functional {
-		template < typename T, decltype(&T::operator()) X >struct matcher;
+		template < typename T,decltype(&T::operator()) X >struct matcher;
 		template < typename T > static constexpr bool match(T*)
 		{
 			return false;
 		}
-		template < typename T > static constexpr bool match(matcher < T, &T::operator() > *)
+		template < typename T > static constexpr bool match(matcher < T,&T::operator() > *)
 		{
 			return true;
 		}
 	public:
 		static constexpr bool value = match < _Tp > (nullptr);
 	};
-}
-
-// Covariant Functional
-
-namespace cov {
-	template<typename> class function;
-	template<typename> class function_base;
-	template<typename> class function_index;
-	template<typename> class executor_index;
-	template<typename> struct function_parser;
-	template<bool,typename> struct function_resolver;
-
 	template<typename _rT,typename..._ArgsT>
 	class function_base<_rT(*)(_ArgsT...)> {
 	public:
@@ -113,27 +108,17 @@ namespace cov {
 		virtual function_base* copy() const=0;
 		virtual _rT call(_ArgsT&&...) const=0;
 	};
-#ifdef COV_COMMON_FUNCTION_INDEX
-	template<typename T> class function_index {
-		type function;
+	template<typename _Tp> class function_container {
+		_Tp function;
 	public:
-		function_index(type func):function(func) {}
-		template<typename...Args>
-		decltype(std::declval<type>()(std::declval<Args>()...))
-		call(Args&&...args)
+		function_container(_Tp func):function(func) {}
+		template<typename..._ArgsT>
+		decltype(std::declval<_Tp>()(std::declval<_ArgsT>()...))
+		call(_ArgsT&&...args)
 		{
-			static_assert(is_function_object,"E0003");
-			return function(args...);
-		}
-		template<typename...Args>
-		decltype(std::declval<type>()(std::declval<Args>()...))
-		operator()(Args&&...args)
-		{
-			static_assert(is_function_object,"E0003");
-			return function(args...);
+			return function(std::forward<_ArgsT>(args)...);
 		}
 	};
-#endif /* #ifndef COV_COMMON_FUNCTION_INDEX */
 	template<typename _rT,typename...Args>
 	class function_index<_rT(*)(Args...)>:public function_base<_rT(*)(Args...)> {
 	public:
@@ -199,7 +184,7 @@ namespace cov {
 		mutable _Tp object;
 		type function;
 	public:
-		executor_index(_Tp obj):object(obj),function(&_Tp::operator()) {}
+		executor_index(const _Tp& obj):object(obj),function(&_Tp::operator()) {}
 		virtual ~executor_index()=default;
 		virtual _rT call(_ArgsT&&...args) const override
 		{
@@ -219,7 +204,7 @@ namespace cov {
 		const _Tp object;
 		type function;
 	public:
-		executor_index(const _Tp obj):object(obj),function(&_Tp::operator()) {}
+		executor_index(const _Tp& obj):object(obj),function(&_Tp::operator()) {}
 		virtual ~executor_index()=default;
 		virtual _rT call(_ArgsT&&...args) const override
 		{
@@ -232,33 +217,33 @@ namespace cov {
 	};
 	template<typename _Tp>struct function_resolver<true,_Tp> {
 		typedef executor_index<decltype(&_Tp::operator())> type;
-		static type make(_Tp f)
+		static type make(const _Tp& f)
 		{
 			return executor_index<decltype(&_Tp::operator())>(f);
 		}
-		static type* make_ptr(_Tp f)
+		static type* make_ptr(const _Tp& f)
 		{
 			return new executor_index<decltype(&_Tp::operator())>(f);
 		}
 	};
 	template<typename _Tp>struct function_resolver<false,_Tp> {
 		typedef function_index<_Tp> type;
-		static type make(_Tp f)
+		static type make(const _Tp& f)
 		{
 			return function_index<_Tp>(f);
 		}
-		static type* make_ptr(_Tp f)
+		static type* make_ptr(const _Tp& f)
 		{
 			return new function_index<_Tp>(f);
 		}
 	};
 	template<typename _Tp> struct function_parser {
 		typedef typename function_resolver<is_functional<_Tp>::value,_Tp>::type type;
-		static type make_func(_Tp f)
+		static type make_func(const _Tp& f)
 		{
 			return function_resolver<is_functional<_Tp>::value,_Tp>::make(f);
 		}
-		static type* make_func_ptr(_Tp f)
+		static type* make_func_ptr(const _Tp& f)
 		{
 			return function_resolver<is_functional<_Tp>::value,_Tp>::make_ptr(f);
 		}
@@ -268,10 +253,21 @@ namespace cov {
 	class function<_rT(ArgsT...)> final {
 		function_base<_rT(*)(ArgsT...)>* mFunc=nullptr;
 	public:
-		function()=default;
-		template<typename _Tp> explicit function(_Tp func)
+		bool callable() const
 		{
-			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
+			return mFunc!=nullptr;
+		}
+		void swap(function&& func) noexcept {
+			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
+			mFunc=func.mFunc;
+			func.mFunc=tmp;
+		}
+		function()=default;
+		template<typename _Tp> explicit function(const _Tp& func)
+		{
+			static_assert(is_same_type<_rT(*)(ArgsT...),
+			              typename function_parser<_Tp>::type::common_type
+			              >::value,"E000B");
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
 		}
 		function(const function& func)
@@ -281,20 +277,12 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func)
-		{
-			if(func.mFunc==nullptr)
-				mFunc=func.mFunc;
-			else
-				mFunc=func.mFunc->copy();
+		function(function&& func) noexcept {
+			swap(std::forward<function>(func));
 		}
 		~function()
 		{
 			delete mFunc;
-		}
-		bool callable() const
-		{
-			return mFunc!=nullptr;
 		}
 		_rT call(ArgsT&&...args) const
 		{
@@ -310,7 +298,9 @@ namespace cov {
 		}
 		template<typename _Tp> function& operator=(_Tp func)
 		{
-			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
+			static_assert(is_same_type<_rT(*)(ArgsT...),
+			              typename function_parser<_Tp>::type::common_type
+			              >::value,"E000B");
 			delete mFunc;
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
 			return *this;
@@ -329,193 +319,166 @@ namespace cov {
 		function& operator=(function&& func)
 		{
 			if(this!=&func) {
-				delete mFunc;
-				if(func.mFunc==nullptr)
-					mFunc=func.mFunc;
-				else
-					mFunc=func.mFunc->copy();
+				swap(std::forward<function>(func));
 			}
+			return *this;
+		}
+	};
+	template<typename _Tp> function_container<_Tp>
+	make_function_container(_Tp func)
+	{
+		return function_container<_Tp>(func);
+	}
+}
+
+// Covariant Any
+
+namespace cov {
+	class any final {
+		class baseHolder {
+		public:
+			baseHolder() = default;
+			virtual ~ baseHolder() = default;
+			virtual const std::type_info & type() const = 0;
+			virtual baseHolder *duplicate() = 0;
+			virtual bool compare(const baseHolder *) const = 0;
+			virtual std::string to_string() const = 0;
+		};
+		template < typename T > class holder final:public baseHolder {
+		protected:
+			T mDat;
+		public:
+			holder() = default;
+			holder(const T& dat):mDat(dat) {}
+			virtual ~ holder() = default;
+			virtual const std::type_info & type() const override
+			{
+				return typeid(T);
+			}
+			virtual baseHolder *duplicate() override
+			{
+				return new holder(mDat);
+			}
+			virtual bool compare(const baseHolder * obj)const override
+			{
+				if (obj->type() == this->type()) {
+					const holder < T > *ptr = dynamic_cast < const holder < T > *>(obj);
+					return ptr!=nullptr?mDat == ptr->data():false;
+				}
+				return false;
+			}
+			virtual std::string to_string() const override
+			{
+				return std::move(std::to_string(mDat));
+			}
+			T & data()
+			{
+				return mDat;
+			}
+			const T & data() const
+			{
+				return mDat;
+			}
+			void data(const T & dat)
+			{
+				mDat = dat;
+			}
+		};
+		baseHolder * mDat;
+	public:
+		void swap(any& obj) noexcept {
+			baseHolder* tmp=this->mDat;
+			this->mDat=obj.mDat;
+			obj.mDat=tmp;
+		}
+		void swap(any&& obj) noexcept {
+			baseHolder* tmp=this->mDat;
+			this->mDat=obj.mDat;
+			obj.mDat=tmp;
+		}
+		bool usable() const noexcept
+		{
+			return mDat != nullptr;
+		}
+		any():mDat(nullptr) {}
+		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
+		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
+		any(any&& v) noexcept { swap(std::forward<any>(v)); }
+		~any()
+		{
+			delete mDat;
+		}
+		const std::type_info & type() const
+		{
+			return this->mDat != nullptr?this->mDat->type():typeid(void);
+		}
+		std::string to_string() const
+		{
+			if(this->mDat == nullptr)
+				throw std::logic_error("E0005");
+			return std::move(this->mDat->to_string());
+		}
+		any & operator=(const any & var)
+		{
+			if(&var!=this) {
+				delete mDat;
+				mDat = var.usable()?var.mDat->duplicate():nullptr;
+			}
+			return *this;
+		}
+		any & operator=(any&& var) noexcept {
+			if(&var!=this)
+				swap(std::forward<any>(var));
+			return *this;
+		}
+		bool operator==(const any & var) const
+		{
+			return usable()?this->mDat->compare(var.mDat):!var.usable();
+		}
+		bool operator!=(const any & var)const
+		{
+			return usable()?!this->mDat->compare(var.mDat):var.usable();
+		}
+		template < typename T > T & val()
+		{
+			if(typeid(T) != this->type())
+				throw std::logic_error("E0006");
+			if(this->mDat == nullptr)
+				throw std::logic_error("E0005");
+			return dynamic_cast < holder < T > *>(this->mDat)->data();
+		}
+		template < typename T > const T & val() const
+		{
+			if(typeid(T) != this->type())
+				throw std::logic_error("E0006");
+			if(this->mDat == nullptr)
+				throw std::logic_error("E0005");
+			return dynamic_cast < const holder < T > *>(this->mDat)->data();
+		}
+		template < typename T > operator T&()
+		{
+			return this->val<T>();
+		}
+		template < typename T > operator const T&() const
+		{
+			return this->val<T>();
+		}
+		template < typename T > void assign(const T & dat)
+		{
+			delete mDat;
+			mDat = new holder < T > (dat);
+		}
+		template < typename T > any & operator=(const T & dat)
+		{
+			assign(dat);
 			return *this;
 		}
 	};
 }
 
-// Covariant Any
-
-class cov::any final {
-public:
-	template < typename T > static std::string toString(const T &)
-	{
-		throw std::logic_error("E000D");
-	}
-private:
-	class baseHolder {
-	public:
-		baseHolder() = default;
-		virtual ~ baseHolder() = default;
-		virtual const std::type_info & type() const = 0;
-		virtual baseHolder *duplicate() = 0;
-		virtual bool compare(const baseHolder *) const = 0;
-		virtual std::string toString() const = 0;
-	};
-	template < typename T > class holder final:public baseHolder {
-	protected:
-		T mDat;
-	public:
-		holder() = default;
-		holder(const T& dat):mDat(dat) {}
-		virtual ~ holder() = default;
-		virtual const std::type_info & type() const override
-		{
-			return typeid(T);
-		}
-		virtual baseHolder *duplicate() override
-		{
-			return new holder(mDat);
-		}
-		virtual bool compare(const baseHolder * obj)const override
-		{
-			if (obj->type() == this->type()) {
-				const holder < T > *ptr = dynamic_cast < const holder < T > *>(obj);
-				if (ptr == nullptr)
-					return false;
-				return mDat == ptr->data();
-			} else
-				return false;
-		}
-		virtual std::string toString() const override
-		{
-			return std::move(any::toString(mDat));
-		}
-		T & data()
-		{
-			return mDat;
-		}
-		const T & data() const
-		{
-			return mDat;
-		}
-		void data(const T & dat)
-		{
-			mDat = dat;
-		}
-	};
-	baseHolder * mDat;
-public:
-	any():mDat(nullptr) {}
-	template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
-	any(const any & v):mDat(v.mDat->duplicate()) {}
-	any(any&& v):mDat(v.mDat->duplicate()) {}
-	~any()
-	{
-		delete mDat;
-	}
-	bool empty() const
-	{
-		return mDat != nullptr;
-	}
-	const std::type_info & type() const
-	{
-		if (this->mDat != nullptr)
-			return this->mDat->type();
-		else
-			return typeid(void);
-	}
-	std::string toString() const
-	{
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		return std::move(this->mDat->toString());
-	}
-	any & operator=(const any & var)
-	{
-		delete mDat;
-		mDat = var.mDat->duplicate();
-		return *this;
-	}
-	bool operator==(const any & var) const
-	{
-		return this->mDat->compare(var.mDat);
-	}
-	bool operator!=(const any & var)const
-	{
-		return !this->mDat->compare(var.mDat);
-	}
-	template < typename T > T & val()
-	{
-		if(typeid(T) != this->type())
-			throw std::logic_error("E0006");
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		return dynamic_cast < holder < T > *>(this->mDat)->data();
-	}
-	template < typename T > const T & val() const
-	{
-		if(typeid(T) != this->type())
-			throw std::logic_error("E0006");
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		return dynamic_cast < const holder < T > *>(this->mDat)->data();
-	}
-	template < typename T > operator T&()
-	{
-		return this->val<T>();
-	}
-	template < typename T > operator const T&() const
-	{
-		return this->val<T>();
-	}
-	template < typename T > void assign(const T & dat)
-	{
-		if (typeid(T) != this->type() || this->mDat == nullptr) {
-			delete mDat;
-			mDat = new holder < T > (dat);
-		}
-		return dynamic_cast < holder < T > *>(mDat)->data(dat);
-	}
-	template < typename T > any & operator=(const T & dat)
-	{
-		assign(dat);
-		return *this;
-	}
-};
-
-namespace cov {
-	template<> std::string cov::any::toString<std::string>(const std::string& str)
-	{
-		return std::move(str);
-	}
-	template<> std::string cov::any::toString<int>(const int& i)
-	{
-		std::string str;
-		std::stringstream ss;
-		ss<<i;
-		ss>>str;
-		return std::move(str);
-	}
-
-	template<> std::string cov::any::toString<float>(const float& i)
-	{
-		std::string str;
-		std::stringstream ss;
-		ss<<i;
-		ss>>str;
-		return std::move(str);
-	}
-
-	template<> std::string cov::any::toString<double>(const double& i)
-	{
-		std::string str;
-		std::stringstream ss;
-		ss<<i;
-		ss>>str;
-		return std::move(str);
-	}
-}
-
 std::ostream& operator<<(std::ostream& out,const cov::any& val)
 {
-	out<<val.toString();
+	out<<val.to_string();
 	return out;
 }
 
@@ -1388,9 +1351,9 @@ public:
 		if(count_types<ArgTypes...>()==this->mTypes.size()) {
 			int result=check_types<ArgTypes...>(1,this->mTypes.begin());
 			if(result!=-1)
-				throw std::invalid_argument("E0008.At "+cov::any::toString(result)+".Expected "+get_type<ArgTypes...>(result,1));
+				throw std::invalid_argument("E0008.At "+std::to_string(result)+".Expected "+get_type<ArgTypes...>(result,1));
 		} else
-			throw std::logic_error("E0009.Expected "+cov::any::toString(count_types<ArgTypes...>()));
+			throw std::logic_error("E0009.Expected "+std::to_string(count_types<ArgTypes...>()));
 	}
 };
 
@@ -1401,6 +1364,3 @@ public:
 #define Case_(typ,obj) cov::logic::checkType<typ>();cov::logic::addMethod<typ>(cov::logic::switcher_stack.current(),obj,cov::function<void()>([&]{
 #define Default cov::logic::switcher_stack.current()->addDefault(cov::function<void()>([&]{
 #define EndCase }));
-
-#endif /* #ifndef __cplusplus */
-#endif /* #if __cplusplus < 201300L */

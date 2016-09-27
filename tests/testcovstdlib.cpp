@@ -1,5 +1,8 @@
 #include <iostream>
 #include "covstdlib.hpp"
+#if __covcpplib < 201610L
+#error Covstdlib version is too old.
+#endif
 int main()
 {
 	std::cout<<
