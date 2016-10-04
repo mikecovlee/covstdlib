@@ -1,4 +1,4 @@
-#include "covany.hpp"
+#include "covstdlib.hpp"
 #include <iostream>
 #include <cmath>
 int main()
@@ -11,6 +11,8 @@ int main()
 		std::cout<<"Ok"<<std::endl;
 	var=3.1415926;
 	var=std::pow(static_cast<double>(var),static_cast<double>(var));
+	std::cout<<var<<std::endl;
+	var="TestStr";
 	std::cout<<var<<std::endl;
 	const cov::any var1=var;
 	if(var==var1)

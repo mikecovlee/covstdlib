@@ -41,7 +41,6 @@ E000B 类型匹配失败。
 E000D 不支持指定类型向std::string的转换
 
 3:Function List(功能列表)
-Covariant Templates Toolbox
 Covariant Functional
 cov::any
 cov::list

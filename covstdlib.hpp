@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.10
+* Library Version: 2.16.11
 *
 * Function List:
 * Covariant Functional(New)
@@ -42,7 +42,7 @@
 #error E0002
 #endif
 
-#define __covcpplib 201610L
+#define __covcpplib 201611L
 
 #include <map>
 #include <deque>
@@ -257,7 +257,14 @@ namespace cov {
 		{
 			return mFunc!=nullptr;
 		}
-		void swap(function&& func) noexcept {
+		void swap(function& func) noexcept
+		{
+			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
+			mFunc=func.mFunc;
+			func.mFunc=tmp;
+		}
+		void swap(function&& func) noexcept
+		{
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
@@ -265,9 +272,7 @@ namespace cov {
 		function()=default;
 		template<typename _Tp> explicit function(const _Tp& func)
 		{
-			static_assert(is_same_type<_rT(*)(ArgsT...),
-			              typename function_parser<_Tp>::type::common_type
-			              >::value,"E000B");
+			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
 		}
 		function(const function& func)
@@ -277,7 +282,8 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func) noexcept {
+		function(function&& func) noexcept
+		{
 			swap(std::forward<function>(func));
 		}
 		~function()
@@ -298,9 +304,7 @@ namespace cov {
 		}
 		template<typename _Tp> function& operator=(_Tp func)
 		{
-			static_assert(is_same_type<_rT(*)(ArgsT...),
-			              typename function_parser<_Tp>::type::common_type
-			              >::value,"E000B");
+			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
 			delete mFunc;
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
 			return *this;
@@ -333,6 +337,17 @@ namespace cov {
 
 // Covariant Any
 
+namespace std {
+	template<typename T> std::string to_string(const T&)
+	{
+		throw std::logic_error("E000D");
+	}
+	template<> std::string to_string<std::string>(const std::string& str)
+	{
+		return str;
+	}
+}
+
 namespace cov {
 	class any final {
 		class baseHolder {
@@ -344,7 +359,7 @@ namespace cov {
 			virtual bool compare(const baseHolder *) const = 0;
 			virtual std::string to_string() const = 0;
 		};
-		template < typename T > class holder final:public baseHolder {
+		template < typename T > class holder:public baseHolder {
 		protected:
 			T mDat;
 		public:
@@ -384,14 +399,16 @@ namespace cov {
 				mDat = dat;
 			}
 		};
-		baseHolder * mDat;
+		baseHolder * mDat=nullptr;
 	public:
-		void swap(any& obj) noexcept {
+		void swap(any& obj) noexcept
+		{
 			baseHolder* tmp=this->mDat;
 			this->mDat=obj.mDat;
 			obj.mDat=tmp;
 		}
-		void swap(any&& obj) noexcept {
+		void swap(any&& obj)
+		{
 			baseHolder* tmp=this->mDat;
 			this->mDat=obj.mDat;
 			obj.mDat=tmp;
@@ -400,10 +417,13 @@ namespace cov {
 		{
 			return mDat != nullptr;
 		}
-		any():mDat(nullptr) {}
+		any()=default;
 		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
 		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
-		any(any&& v) noexcept { swap(std::forward<any>(v)); }
+		any(any&& v) noexcept
+		{
+			swap(std::forward<any>(v));
+		}
 		~any()
 		{
 			delete mDat;
@@ -426,7 +446,8 @@ namespace cov {
 			}
 			return *this;
 		}
-		any & operator=(any&& var) noexcept {
+		any & operator=(any&& var) noexcept
+		{
 			if(&var!=this)
 				swap(std::forward<any>(var));
 			return *this;
@@ -473,6 +494,15 @@ namespace cov {
 			assign(dat);
 			return *this;
 		}
+	};
+	template<int N> class any::holder<char[N]>:public any::holder<std::string> {
+	public:
+		holder()=default;
+		holder(const char* str)
+		{
+			mDat=str;
+		}
+		virtual ~holder()=default;
 	};
 }
 
@@ -1067,7 +1097,7 @@ class cov::timer final {
 public:
 	typedef unsigned long timer_t;
 	enum class time_unit {
-	    nano_sec, micro_sec, milli_sec, second, minute
+		nano_sec, micro_sec, milli_sec, second, minute
 	};
 	static void reset()
 	{
@@ -1277,7 +1307,8 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs( {
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
+	{
 		args...
 	})
 	{

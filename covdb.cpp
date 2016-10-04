@@ -15,9 +15,9 @@ namespace cov {
 			typedef std::vector<int> ARR;
 		}
 		enum class access_type {
-		    preload,
-		    real_time,
-		    stepper
+			preload,
+			real_time,
+			stepper
 		};
 		template<typename _Key,typename _Val>
 		class db_element_base final {
@@ -107,15 +107,15 @@ namespace cov {
 				for(const auto& it:element.second) {
 					outfs<<it.first;
 					if(it.second.type()==typeid(type::INT)) {
-						outfs<<"?INT="<<it.second.toString()<<';';
+						outfs<<"?INT="<<it.second.to_string()<<';';
 						continue;
 					}
 					if(it.second.type()==typeid(type::FLT)) {
-						outfs<<"?FLT="<<it.second.toString()<<';';
+						outfs<<"?FLT="<<it.second.to_string()<<';';
 						continue;
 					}
 					if(it.second.type()==typeid(type::STR)) {
-						outfs<<"?STR="<<it.second.toString()<<';';
+						outfs<<"?STR="<<it.second.to_string()<<';';
 						continue;
 					}
 					if(it.second.type()==typeid(type::ARR)) {
@@ -179,7 +179,7 @@ namespace cov {
 			}
 			EndSwitch;
 		}
-		void load_form_file(const std::string& file,database& db)
+		void load_from_file(const std::string& file,database& db)
 		{
 			std::ifstream infs(file);
 			if(!infs.is_open())
@@ -236,6 +236,25 @@ namespace cov {
 				}
 			}
 		}
+		std::string replace_variable(const std::string& str,const db_element& data)
+		{
+			std::string nstr,tmp;
+			bool reading_var_name=false;
+			for(const auto& it:str) {
+				if(it=='%') {
+					if(reading_var_name)
+						nstr+=data.at(tmp).to_string();
+					else
+						reading_var_name=true;
+					continue;
+				}
+				if(reading_var_name)
+					tmp+=it;
+				else
+					nstr+=it;
+			}
+			return nstr;
+		}
 		void print_database(const database& db)
 		{
 			for(const auto& data:db) {
@@ -249,7 +268,10 @@ namespace cov {
 						}
 						std::cout<<'}'<<std::endl;
 					} else {
-						std::cout<<" Value="<<element.second<<std::endl;
+						if(element.second.type()==typeid(type::STR))
+							std::cout<<" Value="<<replace_variable(element.second.val<std::string>(),db.at("VARIABLES"))<<std::endl;
+						else
+							std::cout<<" Value="<<element.second<<std::endl;
 					}
 				}
 			}
@@ -257,7 +279,8 @@ namespace cov {
 		}
 	}
 }
-int main()
+
+/*int main()
 {
 	std::string cmd;
 	std::string key;
@@ -307,4 +330,4 @@ int main()
 			std::cout<<"KEY="<<it.first<<" VAL="<<it.second<<std::endl;
 		}
 	}
-}
+}*/
