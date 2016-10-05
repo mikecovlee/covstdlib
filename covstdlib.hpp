@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.11
+* Library Version: 2.16.12
 *
 * Function List:
 * Covariant Functional(New)
@@ -28,7 +28,7 @@
 * cov::list
 * cov::tuple
 * cov::timer
-* cov::switcher
+* cov::switcher(New)
 * cov::argument_list
 *
 * Marco List:
@@ -42,7 +42,7 @@
 #error E0002
 #endif
 
-#define __covcpplib 201611L
+#define __covcpplib 201612L
 
 #include <map>
 #include <deque>
@@ -257,20 +257,18 @@ namespace cov {
 		{
 			return mFunc!=nullptr;
 		}
-		void swap(function& func) noexcept
-		{
+		void swap(function& func) noexcept {
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
 		}
-		void swap(function&& func) noexcept
-		{
+		void swap(function&& func) noexcept {
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
 		}
 		function()=default;
-		template<typename _Tp> explicit function(const _Tp& func)
+		template<typename _Tp> function(const _Tp& func)
 		{
 			static_assert(is_same_type<_rT(*)(ArgsT...),typename function_parser<_Tp>::type::common_type>::value,"E000B");
 			mFunc=function_parser<_Tp>::make_func_ptr(func);
@@ -282,8 +280,7 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func) noexcept
-		{
+		function(function&& func) noexcept {
 			swap(std::forward<function>(func));
 		}
 		~function()
@@ -401,8 +398,7 @@ namespace cov {
 		};
 		baseHolder * mDat=nullptr;
 	public:
-		void swap(any& obj) noexcept
-		{
+		void swap(any& obj) noexcept {
 			baseHolder* tmp=this->mDat;
 			this->mDat=obj.mDat;
 			obj.mDat=tmp;
@@ -420,8 +416,7 @@ namespace cov {
 		any()=default;
 		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
 		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
-		any(any&& v) noexcept
-		{
+		any(any&& v) noexcept {
 			swap(std::forward<any>(v));
 		}
 		~any()
@@ -446,8 +441,7 @@ namespace cov {
 			}
 			return *this;
 		}
-		any & operator=(any&& var) noexcept
-		{
+		any & operator=(any&& var) noexcept {
 			if(&var!=this)
 				swap(std::forward<any>(var));
 			return *this;
@@ -1097,7 +1091,7 @@ class cov::timer final {
 public:
 	typedef unsigned long timer_t;
 	enum class time_unit {
-		nano_sec, micro_sec, milli_sec, second, minute
+	    nano_sec, micro_sec, milli_sec, second, minute
 	};
 	static void reset()
 	{
@@ -1153,105 +1147,83 @@ std::chrono::time_point < std::chrono::high_resolution_clock > cov::timer::m_tim
 // Covariant Switcher
 
 namespace cov {
-	namespace logic {
-		class baseSwitcher {
-		public:
-			baseSwitcher() = default;
-			virtual ~ baseSwitcher()
-			{
-			}
-			virtual void addDefault(cov::function<void()>&&) = 0;
-			virtual const std::type_info & typeinf() = 0;
-			virtual void perform() = 0;
-		};
-		template < typename T > class switcher final:public baseSwitcher {
-		protected:
-			const T & mCondition;
-			cov::function<void()> mDefault;
-			std::map < const T, cov::function<void()> >mcases;
-		public:
-			switcher() = delete;
-			switcher(const T & condition):mCondition(condition) {}
-			virtual ~ switcher() {}
-			void addDefault(cov::function<void()>&& func) override
-			{
-				mDefault = func;
-			}
-			const std::type_info & typeinf() override
-			{
-				return typeid(T);
-			}
-			void addMethod(const T & lable, cov::function<void()>&& func)
-			{
-				mcases[lable] = func;
-			}
-			void perform() override
-			{
-				if (mcases.find(mCondition) == mcases.end()) {
-					if (mDefault.callable())
-						mDefault();
-				} else
-					mcases[mCondition]();
-			}
-		};
-		class switches final {
-		protected:
-			cov::list < baseSwitcher * >mSwitches;
-		public:
-			void clear()
-			{
-				mSwitches.clear();
-			}
-			baseSwitcher *current()
-			{
-				return mSwitches.back();
-			}
-			void pop()
-			{
-				if (mSwitches.back() != nullptr)
-					delete mSwitches.back();
-				mSwitches.pop_back();
-			}
-			void push(baseSwitcher * s)
-			{
-				mSwitches.push_back(s);
-			}
-		};
-		static switches switcher_stack;
-		template < typename T > void checkType()
+	class switcher final {
+	public:
+		typedef cov::function<void()> case_type;
+		static bool report_warning;
+	private:
+		std::deque<cov::tuple<cov::any,cov::function<void()>>> mCases;
+		cov::function<void()> mDefault;
+		const cov::any mCondition;
+	public:
+		switcher()=delete;
+		switcher(const cov::any& val):mCondition(val) {}
+		switcher(switcher&&) noexcept=delete;
+		switcher(const switcher&)=delete;
+		~switcher()=default;
+		void add_case(const cov::any& head,const case_type& body)
 		{
-			const std::type_info & current_switcher_type = switcher_stack.current()->typeinf();
-			if(typeid(T) != current_switcher_type)
-				throw std::logic_error("E0006");
+			if(report_warning&&head.type()!=mCondition.type())
+				throw std::logic_error("W0001");
+			bool exsist=false;
+			for(auto& it:mCases) {
+				if(it.get<0>()==head) {
+					exsist=true;
+					if(report_warning)
+						throw std::logic_error("W0002");
+					else
+						it.get<1>()=body;
+					break;
+				}
+			}
+			if(!exsist)
+				mCases.push_back({head,body});
 		}
-		template < typename T > baseSwitcher * GetSwitcher(const T & condition)
+		void add_default(const case_type& body)
 		{
-			return new switcher < T > (condition);
+			if(mDefault.callable()&&report_warning)
+				throw std::logic_error("W0002");
+			mDefault=body;
 		}
-		template < typename T > void addMethod(baseSwitcher * ptr, const T & obj,cov::function<void()>&& func)
+		void perform()
 		{
-			checkType < T > ();
-			switcher < T > *s = dynamic_cast < switcher < T > *>(ptr);
-			if (s != nullptr)
-				s->addMethod(obj, std::forward<cov::function<void()>>(func));
+			for(auto& it:mCases) {
+				if(it.get<0>()==mCondition&&it.get<1>().callable()) {
+					it.get<1>().call();
+					return;
+				}
+			}
+			if(mDefault.callable())
+				mDefault.call();
 		}
-		template < typename T > void runSwitcher(const T & switches)
+	};
+	bool switcher::report_warning=true;
+	class switcher_stack final {
+		std::deque<switcher*> mStack;
+	public:
+		switcher_stack()=default;
+		switcher_stack(switcher_stack&&) noexcept=delete;
+		switcher_stack(const switcher_stack&)=delete;
+		~switcher_stack()
 		{
-			static_assert(is_functional<T>::value,"E0003");
-			switches();
+			for(auto&it:mStack)
+				delete it;
 		}
-		baseSwitcher *GetSwitcher(const char *str)
+		switcher& top()
 		{
-			return new switcher < std::string > (str);
+			return *mStack.front();
 		}
-		void addMethod(baseSwitcher * ptr, const char *str, cov::function<void()>&& func)
+		void push(const cov::any& val)
 		{
-			checkType < std::string > ();
-			switcher < std::string > *s = dynamic_cast < switcher < std::string > *>(ptr);
-			if (s != nullptr)
-				s->addMethod(std::string(str), std::forward<cov::function<void()>>(func));
+			mStack.push_front(new switcher(val));
 		}
-	}
+		void pop()
+		{
+			delete mStack.front();
+			mStack.pop_front();
+		}
+	};
+	switcher_stack cov_switchers;
 }
 
 // Covariant Argument List
@@ -1307,8 +1279,7 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
-	{
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs( {
 		args...
 	})
 	{
@@ -1388,10 +1359,8 @@ public:
 	}
 };
 
-#define Switch(obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher(obj));
-#define Switch_(typ,obj) cov::logic::runSwitcher([&]{cov::logic::switcher_stack.push(cov::logic::GetSwitcher<typ>(obj));
-#define EndSwitch cov::logic::switcher_stack.current()->perform();cov::logic::switcher_stack.pop();});
-#define Case(obj) cov::logic::addMethod(cov::logic::switcher_stack.current(),obj,cov::function<void()>([&]{
-#define Case_(typ,obj) cov::logic::checkType<typ>();cov::logic::addMethod<typ>(cov::logic::switcher_stack.current(),obj,cov::function<void()>([&]{
-#define Default cov::logic::switcher_stack.current()->addDefault(cov::function<void()>([&]{
-#define EndCase }));
+#define Switch(obj) cov::cov_switchers.push(obj);
+#define EndSwitch cov::cov_switchers.top().perform();cov::cov_switchers.pop();
+#define Case(obj) cov::cov_switchers.top().add_case(obj,[&]{
+#define Default cov::cov_switchers.top().add_default([&]{
+#define EndCase });

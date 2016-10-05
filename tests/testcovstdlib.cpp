@@ -1,14 +1,14 @@
 #include <iostream>
 #include "covstdlib.hpp"
-#if __covcpplib < 201610L
+#if __covcpplib < 201612L
 #error Covstdlib version is too old.
 #endif
 int main()
 {
 	std::cout<<
-	cov::timer::measure(cov::timer::time_unit::milli_sec,cov::function<void()>([] {
+	cov::timer::measure(cov::timer::time_unit::milli_sec,[] {
 		cov::timer::delay(cov::timer::time_unit::milli_sec,101);
-	})) <<std::endl;
+	}) <<std::endl;
 	cov::any a=3.1415926;
 	std::cout<<a<<std::endl;
 	auto t=cov::make_tuple(22,3.1415926,'@',std::string("Hello"));

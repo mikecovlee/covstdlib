@@ -15,9 +15,9 @@ namespace cov {
 			typedef std::vector<int> ARR;
 		}
 		enum class access_type {
-			preload,
-			real_time,
-			stepper
+		    preload,
+		    real_time,
+		    stepper
 		};
 		template<typename _Key,typename _Val>
 		class db_element_base final {
