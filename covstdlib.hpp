@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.12
+* Library Version: 2.16.13
 *
 * Function List:
 * Covariant Functional(New)
@@ -42,7 +42,7 @@
 #error E0002
 #endif
 
-#define __covcpplib 201612L
+#define __covcpplib 201613L
 
 #include <map>
 #include <deque>
@@ -491,12 +491,11 @@ namespace cov {
 	};
 	template<int N> class any::holder<char[N]>:public any::holder<std::string> {
 	public:
-		holder()=default;
-		holder(const char* str)
-		{
-			mDat=str;
-		}
-		virtual ~holder()=default;
+		using holder<std::string>::holder;
+	};
+	template<> class any::holder<std::type_info>:public any::holder<std::type_index> {
+	public:
+		using holder<std::type_index>::holder;
 	};
 }
 
