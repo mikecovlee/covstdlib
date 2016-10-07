@@ -50,8 +50,8 @@
 #include <thread>
 #include <chrono>
 #include <utility>
-#include <ostream>
 #include <typeinfo>
+#include <iostream>
 #include <exception>
 #include <typeindex>
 
@@ -60,7 +60,8 @@ namespace cov {
 		std::string mWhat="Covstdlib Warning";
 	public:
 		warning()=default;
-		warning(const std::string& str) noexcept:mWhat("Covstdlib Warning:"+str) {}
+	warning(const std::string& str) noexcept:
+		mWhat("Covstdlib Warning:"+str) {}
 		warning(const warning&)=default;
 		warning(warning&&)=default;
 		virtual ~warning()=default;
@@ -73,7 +74,8 @@ namespace cov {
 		std::string mWhat="Covstdlib Error";
 	public:
 		error()=default;
-		error(const std::string& str) noexcept:mWhat("Covstdlib Error:"+str) {}
+	error(const std::string& str) noexcept:
+		mWhat("Covstdlib Error:"+str) {}
 		error(const error&)=default;
 		error(error&&)=default;
 		virtual ~error()=default;
@@ -99,8 +101,7 @@ namespace cov {
 		{
 			return typeid(*this).name();
 		}
-		virtual object* clone() noexcept
-		{
+		virtual object* clone() noexcept {
 			return nullptr;
 		}
 		virtual bool equals(const object* ptr) const noexcept
@@ -335,14 +336,12 @@ namespace cov {
 		{
 			return mFunc!=nullptr;
 		}
-		void swap(function& func) noexcept
-		{
+		void swap(function& func) noexcept {
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
 		}
-		void swap(function&& func) noexcept
-		{
+		void swap(function&& func) noexcept {
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
@@ -360,8 +359,7 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func) noexcept
-		{
+		function(function&& func) noexcept {
 			swap(std::forward<function>(func));
 		}
 		~function()
@@ -479,8 +477,8 @@ namespace cov {
 		};
 		baseHolder * mDat=nullptr;
 	public:
-		void swap(any& obj) noexcept
-		{
+		static any infer_value(const std::string&);
+		void swap(any& obj) noexcept {
 			baseHolder* tmp=this->mDat;
 			this->mDat=obj.mDat;
 			obj.mDat=tmp;
@@ -498,8 +496,7 @@ namespace cov {
 		any()=default;
 		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
 		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
-		any(any&& v) noexcept
-		{
+		any(any&& v) noexcept {
 			swap(std::forward<any>(v));
 		}
 		~any()
@@ -524,8 +521,7 @@ namespace cov {
 			}
 			return *this;
 		}
-		any & operator=(any&& var) noexcept
-		{
+		any & operator=(any&& var) noexcept {
 			if(&var!=this)
 				swap(std::forward<any>(var));
 			return *this;
@@ -581,6 +577,62 @@ namespace cov {
 	public:
 		using holder<std::type_index>::holder;
 	};
+}
+
+cov::any cov::any::infer_value(const std::string& str)
+{
+	if(str=="true"||str=="True"||str=="TRUE")
+		return true;
+	if(str=="false"||str=="False"||str=="FALSE")
+		return false;
+	enum types {
+		interger,floating,other
+	} type=types::interger;
+	for(auto& it:str) {
+		if(!std::isdigit(it)&&it!='.') {
+			type=other;
+			break;
+		}
+		if(!std::isdigit(it)&&it=='.') {
+			if(type==interger) {
+				type=floating;
+				continue;
+			}
+			if(type==floating) {
+				type=other;
+				break;
+			}
+		}
+	}
+	switch(type) {
+	case interger:
+		try {
+			return std::stoi(str);
+		} catch(std::out_of_range) {
+			try {
+				return std::stol(str);
+			} catch(std::out_of_range) {
+				try {
+					return std::stoll(str);
+				} catch(std::out_of_range) {
+					return str;
+				}
+			}
+		}
+	case floating:
+		return std::stod(str);
+	case other:
+		break;
+	}
+	return str;
+}
+
+std::istream& operator>>(std::istream& in,cov::any& val)
+{
+	static std::string str;
+	in>>str;
+	val=cov::any::infer_value(str);
+	return in;
 }
 
 std::ostream& operator<<(std::ostream& out,const cov::any& val)
@@ -796,7 +848,7 @@ class cov::timer final {
 public:
 	typedef unsigned long timer_t;
 	enum class time_unit {
-		nano_sec, micro_sec, milli_sec, second, minute
+	    nano_sec, micro_sec, milli_sec, second, minute
 	};
 	static void reset()
 	{
@@ -982,8 +1034,7 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
-	{
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs( {
 		args...
 	})
 	{
