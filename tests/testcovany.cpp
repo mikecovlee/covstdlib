@@ -1,7 +1,7 @@
 #include "covstdlib.hpp"
 #include <iostream>
 #include <cmath>
-int main()
+int cov::covstdlib::main(const cov::covstdlib::string_array& args)
 {
 	cov::any var;
 	var=var.usable();

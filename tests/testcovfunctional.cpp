@@ -26,7 +26,7 @@ template<typename _Tp,typename _rT,typename..._ArgsT> cov::function<_rT(_ArgsT..
 {
 	return std::move(cov::function<_rT(_ArgsT...)>(f));
 }
-int main(int args,char** argv)
+int cov::covstdlib::main(const cov::covstdlib::string_array& args)
 {
 	std::string str=",World!";
 	fack_func ffunc;

@@ -20,12 +20,11 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.13
+* Library Version: 2.16.14
 *
 * Function List:
 * Covariant Functional(New)
 * cov::any(New)
-* cov::list
 * cov::tuple
 * cov::timer
 * cov::switcher(New)
@@ -42,21 +41,83 @@
 #error E0002
 #endif
 
-#define __covcpplib 201613L
+#define __covcpplib 201614L
 
 #include <map>
 #include <deque>
+#include <cstdio>
 #include <string>
 #include <thread>
 #include <chrono>
-#include <memory>
 #include <utility>
 #include <ostream>
 #include <typeinfo>
-#include <stdexcept>
+#include <exception>
 #include <typeindex>
 
 namespace cov {
+	class warning final:public std::exception {
+		std::string mWhat="Covstdlib Warning";
+	public:
+		warning()=default;
+		warning(const std::string& str) noexcept:mWhat("Covstdlib Warning:"+str) {}
+		warning(const warning&)=default;
+		warning(warning&&)=default;
+		virtual ~warning()=default;
+		virtual const char* what() const noexcept override
+		{
+			return this->mWhat.c_str();
+		}
+	};
+	class error final:public std::exception {
+		std::string mWhat="Covstdlib Error";
+	public:
+		error()=default;
+		error(const std::string& str) noexcept:mWhat("Covstdlib Error:"+str) {}
+		error(const error&)=default;
+		error(error&&)=default;
+		virtual ~error()=default;
+		error& operator=(const error&)=default;
+		error& operator=(error&&)=default;
+		virtual const char* what() const noexcept override
+		{
+			return this->mWhat.c_str();
+		}
+	};
+	class object {
+	public:
+		static bool show_warning;
+		object()=default;
+		object(object&&) noexcept=default;
+		object(const object&)=default;
+		virtual ~object()=default;
+		virtual std::type_index object_type() const noexcept final
+		{
+			return typeid(*this);
+		}
+		virtual std::string to_string() const noexcept
+		{
+			return typeid(*this).name();
+		}
+		virtual object* clone() noexcept
+		{
+			return nullptr;
+		}
+		virtual bool equals(const object* ptr) const noexcept
+		{
+			return this==ptr;
+		}
+	};
+	class covstdlib final:public object {
+	public:
+		typedef std::deque<std::string> string_array;
+		covstdlib()=default;
+		covstdlib(const covstdlib&)=delete;
+		covstdlib(covstdlib&&) noexcept=delete;
+		~covstdlib()=default;
+		static int main(const string_array&);
+	};
+	bool object::show_warning=true;
 	template<typename> class function;
 	template<typename> class function_base;
 	template<typename> class function_container;
@@ -66,8 +127,25 @@ namespace cov {
 	template<bool,typename> struct function_resolver;
 	class any;
 	class timer;
+	class switcher;
 	class argument_list;
-	template < typename > class list;
+}
+
+int main(int args,char** argv)
+{
+	static cov::covstdlib::string_array arr;
+	for(int i=0; i<args; ++i)
+		arr.push_back(argv[i]);
+	try {
+		return cov::covstdlib::main(arr);
+	} catch(cov::warning w) {
+		std::printf("%s\nAborted",w.what());
+		return -1;
+	} catch(cov::error e) {
+		std::printf("%s\nAborted",e.what());
+		return -1;
+	}
+	return -1;
 }
 
 // Covariant Functional
@@ -257,12 +335,14 @@ namespace cov {
 		{
 			return mFunc!=nullptr;
 		}
-		void swap(function& func) noexcept {
+		void swap(function& func) noexcept
+		{
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
 		}
-		void swap(function&& func) noexcept {
+		void swap(function&& func) noexcept
+		{
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
@@ -280,7 +360,8 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func) noexcept {
+		function(function&& func) noexcept
+		{
 			swap(std::forward<function>(func));
 		}
 		~function()
@@ -290,13 +371,13 @@ namespace cov {
 		_rT call(ArgsT&&...args) const
 		{
 			if(!callable())
-				throw std::logic_error("E0005");
+				throw cov::error("E0005");
 			return mFunc->call(std::forward<ArgsT>(args)...);
 		}
 		_rT operator()(ArgsT&&...args) const
 		{
 			if(!callable())
-				throw std::logic_error("E0005");
+				throw cov::error("E0005");
 			return mFunc->call(std::forward<ArgsT>(args)...);
 		}
 		template<typename _Tp> function& operator=(_Tp func)
@@ -337,7 +418,7 @@ namespace cov {
 namespace std {
 	template<typename T> std::string to_string(const T&)
 	{
-		throw std::logic_error("E000D");
+		throw cov::error("E000D");
 	}
 	template<> std::string to_string<std::string>(const std::string& str)
 	{
@@ -398,7 +479,8 @@ namespace cov {
 		};
 		baseHolder * mDat=nullptr;
 	public:
-		void swap(any& obj) noexcept {
+		void swap(any& obj) noexcept
+		{
 			baseHolder* tmp=this->mDat;
 			this->mDat=obj.mDat;
 			obj.mDat=tmp;
@@ -416,7 +498,8 @@ namespace cov {
 		any()=default;
 		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
 		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
-		any(any&& v) noexcept {
+		any(any&& v) noexcept
+		{
 			swap(std::forward<any>(v));
 		}
 		~any()
@@ -430,7 +513,7 @@ namespace cov {
 		std::string to_string() const
 		{
 			if(this->mDat == nullptr)
-				throw std::logic_error("E0005");
+				throw cov::error("E0005");
 			return std::move(this->mDat->to_string());
 		}
 		any & operator=(const any & var)
@@ -441,7 +524,8 @@ namespace cov {
 			}
 			return *this;
 		}
-		any & operator=(any&& var) noexcept {
+		any & operator=(any&& var) noexcept
+		{
 			if(&var!=this)
 				swap(std::forward<any>(var));
 			return *this;
@@ -457,17 +541,17 @@ namespace cov {
 		template < typename T > T & val()
 		{
 			if(typeid(T) != this->type())
-				throw std::logic_error("E0006");
+				throw cov::error("E0006");
 			if(this->mDat == nullptr)
-				throw std::logic_error("E0005");
+				throw cov::error("E0005");
 			return dynamic_cast < holder < T > *>(this->mDat)->data();
 		}
 		template < typename T > const T & val() const
 		{
 			if(typeid(T) != this->type())
-				throw std::logic_error("E0006");
+				throw cov::error("E0006");
 			if(this->mDat == nullptr)
-				throw std::logic_error("E0005");
+				throw cov::error("E0005");
 			return dynamic_cast < const holder < T > *>(this->mDat)->data();
 		}
 		template < typename T > operator T&()
@@ -504,384 +588,6 @@ std::ostream& operator<<(std::ostream& out,const cov::any& val)
 	out<<val.to_string();
 	return out;
 }
-
-// Covariant List
-
-template < typename T > class cov::list final {
-protected:
-	class node;
-	class base_iterator;
-	node mFront;
-	node mBack;
-	unsigned long mSize = 0;
-	void copy(const list & lst)
-	{
-		for (iterator it = lst.begin(); it != lst.end(); ++it)
-			push_back(*it);
-	}
-public:
-	class iterator;
-	class reverse_iterator;
-	list():mFront(nullptr, &mBack), mBack(&mFront, nullptr), mSize(0)
-	{
-	}
-	list(const list & obj)
-	{
-		copy(obj);
-	}
-	list & operator=(const list & obj)
-	{
-		clear();
-		copy(obj);
-		return *this;
-	}
-	~list()
-	{
-		clear();
-	}
-	unsigned long size() const
-	{
-		return mSize;
-	}
-	bool empty() const
-	{
-		return !mFront.forward()->usable();
-	}
-	void clear()
-	{
-		for (iterator it = this->begin(); it != this->end();)
-			it = this->erase(it);
-	}
-	void push_front(const T & dat)
-	{
-		node *newdat = new node(&mFront, new T(dat), mFront.forward());
-		mFront.forward()->backward(newdat);
-		mFront.forward(newdat);
-		++mSize;
-	}
-	template < typename...Args > void emplace_front(Args && ... args)
-	{
-		node *newdat = new node(&mFront, new T(args...), mFront.forward());
-		mFront.forward()->backward(newdat);
-		mFront.forward(newdat);
-		++mSize;
-	}
-	void push_back(const T & dat)
-	{
-		node *newdat = new node(mBack.backward(), new T(dat), &mBack);
-		mBack.backward()->forward(newdat);
-		mBack.backward(newdat);
-		++mSize;
-	}
-	template < typename...Args > void emplace_back(Args && ... args)
-	{
-		node *newdat = new node(mBack.backward(), new T(args...), &mBack);
-		mBack.backward()->forward(newdat);
-		mBack.backward(newdat);
-		++mSize;
-	}
-	void insert(base_iterator & it, const T & dat)
-	{
-		if(!it.usable())
-			throw std::logic_error("E0005");
-		node *current = it.mDat;
-		node *newdat = new node(current->backward(), new T(dat), current);
-		current->backward()->forward(newdat);
-		current->backward(newdat);
-		++mSize;
-	}
-	template < typename...Args > void emplace(base_iterator & it, Args && ... args)
-	{
-		if(!it.usable())
-			throw std::logic_error("E0005");
-		node *current = it.mDat;
-		node *newdat = new node(current->backward(), new T(args...), current);
-		current->backward()->forward(newdat);
-		current->backward(newdat);
-		++mSize;
-	}
-	void pop_front()
-	{
-		if (mSize == 0)
-			return;
-		node *current = mFront.forward();
-		current->forward()->backward(&mFront);
-		mFront.forward(current->forward());
-		delete current->data();
-		delete current;
-		--mSize;
-	}
-	void pop_back()
-	{
-		if (mSize == 0)
-			return;
-		node *current = mBack.backward();
-		current->backward()->forward(&mBack);
-		mBack.backward(current->backward());
-		delete current->data();
-		delete current;
-		--mSize;
-	}
-	iterator erase(base_iterator & it)
-	{
-		if(!it.usable())
-			throw std::logic_error("E0005");
-		node *current = it.mDat;
-		node *previous = current->backward();
-		node *next = current->forward();
-		if (previous != nullptr)
-			previous->forward(next);
-		if (next != nullptr)
-			next->backward(previous);
-		delete current->data();
-		delete current;
-		--mSize;
-		return iterator(next);
-	}
-	iterator erase(base_iterator & start, base_iterator & finish)
-	{
-		for (iterator it = start; it != finish; it = erase(it));
-		return erase(finish);
-	}
-	void remove(const T & dat)
-	{
-		for (iterator it = this->begin(); it != this->end();) {
-			if (*it == dat)
-				it = this->erase(it);
-			else
-				++it;
-		}
-	}
-	template < typename __func > void remove_if(__func && condition)
-	{
-		for (iterator it = this->begin(); it != this->end();) {
-			if (condition(*it))
-				it = this->erase(it);
-			else
-				++it;
-		}
-	}
-	void resize(unsigned long size)
-	{
-		while (mSize > size)
-			pop_back();
-		while (mSize < size)
-			emplace_back();
-	}
-	T & front()
-	{
-		if(!mFront.forward()->usable())
-			throw std::logic_error("E0005");
-		return *mFront.forward()->data();
-	}
-	const T & front() const
-	{
-		return this->front();
-	}
-	T & back()
-	{
-		if(!mBack.backward()->usable())
-			throw std::logic_error("E0005");
-		return *mBack.backward()->data();
-	}
-	const T & back() const
-	{
-		return this->back();
-	}
-	iterator begin()
-	{
-		return iterator(mFront.forward());
-	}
-	iterator end()
-	{
-		return iterator(&mBack);
-	}
-	reverse_iterator rbegin()
-	{
-		return reverse_iterator(mBack.backward());
-	}
-	reverse_iterator rend()
-	{
-		return reverse_iterator(&mFront);
-	}
-};
-template < typename T > class cov::list < T >::node {
-protected:
-	node * mFront;
-	node *mBack;
-	T *mDat;
-public:
-	node():mFront(nullptr), mBack(nullptr), mDat(nullptr)
-	{
-	}
-	node(T * dat):mFront(nullptr), mBack(nullptr), mDat(dat)
-	{
-	}
-	node(node * front, node * back):mFront(back), mBack(front), mDat(nullptr)
-	{
-	}
-	node(node * front, T * dat, node * back):mFront(back), mBack(front), mDat(dat)
-	{
-	}
-	node(const node & obj):mFront(obj.forward()), mBack(obj.backward()), mDat(obj.data())
-	{
-	}
-	~node() = default;
-	node *forward()
-	{
-		return mFront;
-	}
-	const node *forward() const
-	{
-		return mFront;
-	}
-	void forward(node * ptr)
-	{
-		mFront = ptr;
-	}
-	node *backward()
-	{
-		return mBack;
-	}
-	const node *backward() const
-	{
-		return mBack;
-	}
-	void backward(node * ptr)
-	{
-		mBack = ptr;
-	}
-	T *data()
-	{
-		return mDat;
-	}
-	const T *data() const
-	{
-		return mDat;
-	}
-	void data(T * dat)
-	{
-		mDat = dat;
-	}
-	bool usable() const
-	{
-		return mDat != nullptr;
-	}
-};
-template < typename T > class cov::list < T >::base_iterator {
-protected:
-	friend class list;
-	node *mDat;
-public:
-	base_iterator() = delete;
-	base_iterator(node * ptr):mDat(ptr)
-	{
-	}
-	base_iterator(const base_iterator & it):mDat(it.mDat)
-	{
-	}
-	virtual ~ base_iterator() = default;
-	virtual T & data()
-	{
-		if(this->mDat == nullptr || !this->mDat->usable())
-			throw std::logic_error("E0005");
-		return *this->mDat->data();
-	}
-	virtual const T & data() const
-	{
-		return this->data();
-	}
-	virtual void data(const T & dat)
-	{
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		if (this->mDat->usable()) {
-			delete this->mDat->data();
-			this->mDat->data(nullptr);
-		}
-		this->mDat->data(new T(dat));
-	}
-	virtual void forward() = 0;
-	virtual void backward() = 0;
-	virtual bool compare(const base_iterator & it) const
-	{
-		if (this->usable() && it.usable())
-			return this->data() == it.data();
-		else
-			return this->mDat == it.mDat;
-	}
-	virtual bool usable() const
-	{
-		if (this->mDat != nullptr)
-			return this->mDat->usable();
-		else
-			return false;
-	}
-	T & operator*()
-	{
-		return this->data();
-	}
-	const T & operator*() const
-	{
-		return this->data();
-	}
-	T *operator->()
-	{
-		return &this->data();
-	}
-	void operator++()
-	{
-		this->forward();
-	}
-	void operator--()
-	{
-		this->backward();
-	}
-	bool operator==(const base_iterator & it) const
-	{
-		return this->compare(it);
-	}
-	bool operator!=(const base_iterator & it)const
-	{
-		return !this->compare(it);
-	}
-};
-template < typename T > class cov::list < T >::iterator:public base_iterator {
-	friend class list;
-public:
-	using base_iterator::base_iterator;
-	iterator() = delete;
-	virtual void forward() override
-	{
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		this->mDat = this->mDat->forward();
-	}
-	virtual void backward() override
-	{
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		this->mDat = this->mDat->backward();
-	}
-};
-template < typename T > class cov::list < T >::reverse_iterator:public base_iterator {
-	friend class list;
-public:
-	using base_iterator::base_iterator;
-	reverse_iterator() = delete;
-	virtual void forward() override
-	{
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		this->mDat = this->mDat->backward();
-	}
-	virtual void backward() override
-	{
-		if(this->mDat == nullptr)
-			throw std::logic_error("E0005");
-		this->mDat = this->mDat->forward();
-	}
-};
 
 // Covariant Tuple
 
@@ -1090,7 +796,7 @@ class cov::timer final {
 public:
 	typedef unsigned long timer_t;
 	enum class time_unit {
-	    nano_sec, micro_sec, milli_sec, second, minute
+		nano_sec, micro_sec, milli_sec, second, minute
 	};
 	static void reset()
 	{
@@ -1149,7 +855,6 @@ namespace cov {
 	class switcher final {
 	public:
 		typedef cov::function<void()> case_type;
-		static bool report_warning;
 	private:
 		std::deque<cov::tuple<cov::any,cov::function<void()>>> mCases;
 		cov::function<void()> mDefault;
@@ -1162,14 +867,14 @@ namespace cov {
 		~switcher()=default;
 		void add_case(const cov::any& head,const case_type& body)
 		{
-			if(report_warning&&head.type()!=mCondition.type())
-				throw std::logic_error("W0001");
+			if(object::show_warning&&head.type()!=mCondition.type())
+				throw cov::warning("W0001");
 			bool exsist=false;
 			for(auto& it:mCases) {
 				if(it.get<0>()==head) {
 					exsist=true;
-					if(report_warning)
-						throw std::logic_error("W0002");
+					if(object::show_warning)
+						throw cov::warning("W0002");
 					else
 						it.get<1>()=body;
 					break;
@@ -1180,8 +885,8 @@ namespace cov {
 		}
 		void add_default(const case_type& body)
 		{
-			if(mDefault.callable()&&report_warning)
-				throw std::logic_error("W0002");
+			if(mDefault.callable()&&object::show_warning)
+				throw cov::warning("W0002");
 			mDefault=body;
 		}
 		void perform()
@@ -1196,7 +901,6 @@ namespace cov {
 				mDefault.call();
 		}
 	};
-	bool switcher::report_warning=true;
 	class switcher_stack final {
 		std::deque<switcher*> mStack;
 	public:
@@ -1278,7 +982,8 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs( {
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
+	{
 		args...
 	})
 	{
@@ -1354,7 +1059,7 @@ public:
 			if(result!=-1)
 				throw std::invalid_argument("E0008.At "+std::to_string(result)+".Expected "+get_type<ArgTypes...>(result,1));
 		} else
-			throw std::logic_error("E0009.Expected "+std::to_string(count_types<ArgTypes...>()));
+			throw cov::error("E0009.Expected "+std::to_string(count_types<ArgTypes...>()));
 	}
 };
 
