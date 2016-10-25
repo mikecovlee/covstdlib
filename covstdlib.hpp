@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.14
+* Library Version: 2.16.15
 *
 * Function List:
 * Covariant Functional(New)
@@ -41,11 +41,10 @@
 #error E0002
 #endif
 
-#define __covcpplib 201614L
+#define __covcpplib 201615L
 
 #include <map>
 #include <deque>
-#include <cstdio>
 #include <string>
 #include <thread>
 #include <chrono>
@@ -109,15 +108,6 @@ namespace cov {
 			return this==ptr;
 		}
 	};
-	class covstdlib final:public object {
-	public:
-		typedef std::deque<std::string> string_array;
-		covstdlib()=default;
-		covstdlib(const covstdlib&)=delete;
-		covstdlib(covstdlib&&) noexcept=delete;
-		~covstdlib()=default;
-		static int main(const string_array&);
-	};
 	bool object::show_warning=true;
 	template<typename> class function;
 	template<typename> class function_base;
@@ -130,23 +120,6 @@ namespace cov {
 	class timer;
 	class switcher;
 	class argument_list;
-}
-
-int main(int args,char** argv)
-{
-	static cov::covstdlib::string_array arr;
-	for(int i=0; i<args; ++i)
-		arr.push_back(argv[i]);
-	try {
-		return cov::covstdlib::main(arr);
-	} catch(cov::warning w) {
-		std::printf("%s\nAborted",w.what());
-		return -1;
-	} catch(cov::error e) {
-		std::printf("%s\nAborted",e.what());
-		return -1;
-	}
-	return -1;
 }
 
 // Covariant Functional
