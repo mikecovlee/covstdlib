@@ -137,6 +137,18 @@ namespace cov {
 	template < typename T > struct is_constant<T const> {
 		static constexpr bool value=true;
 	};
+	template < typename _Tp > struct add_reference {
+		typedef _Tp& type;
+	};
+	template < typename _Tp > struct add_reference<_Tp&> {
+		typedef _Tp& type;
+	};
+	template < typename _Tp > struct add_reference<_Tp&&> {
+		typedef _Tp&& type;
+	};
+	template < typename _Tp > struct add_reference<_Tp*> {
+		typedef _Tp* type;
+	};
 	template < typename _Tp > class is_functional {
 		template < typename T,decltype(&T::operator()) X >struct matcher;
 		template < typename T > static constexpr bool match(T*)
@@ -345,7 +357,7 @@ namespace cov {
 				throw cov::error("E0005");
 			return mFunc->call(std::forward<ArgsT>(args)...);
 		}
-		_rT operator()(ArgsT&&...args) const
+		_rT operator()(typename add_reference<ArgsT>::type...args) const
 		{
 			if(!callable())
 				throw cov::error("E0005");
