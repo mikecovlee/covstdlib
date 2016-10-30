@@ -20,12 +20,12 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.15
+* Library Version: 2.16.16
 *
 * Function List:
 * Covariant Functional(New)
 * cov::any(New)
-* cov::tuple
+* cov::tuple(New)
 * cov::timer
 * cov::switcher(New)
 * cov::argument_list
@@ -41,7 +41,7 @@
 #error E0002
 #endif
 
-#define __covcpplib 201615L
+#define __covcpplib 201616L
 
 #include <map>
 #include <deque>
@@ -59,8 +59,8 @@ namespace cov {
 		std::string mWhat="Covstdlib Warning";
 	public:
 		warning()=default;
-	warning(const std::string& str) noexcept:
-		mWhat("Covstdlib Warning:"+str) {}
+		warning(const std::string& str) noexcept:
+			mWhat("Covstdlib Warning:"+str) {}
 		warning(const warning&)=default;
 		warning(warning&&)=default;
 		virtual ~warning()=default;
@@ -73,8 +73,8 @@ namespace cov {
 		std::string mWhat="Covstdlib Error";
 	public:
 		error()=default;
-	error(const std::string& str) noexcept:
-		mWhat("Covstdlib Error:"+str) {}
+		error(const std::string& str) noexcept:
+			mWhat("Covstdlib Error:"+str) {}
 		error(const error&)=default;
 		error(error&&)=default;
 		virtual ~error()=default;
@@ -100,7 +100,8 @@ namespace cov {
 		{
 			return typeid(*this).name();
 		}
-		virtual object* clone() noexcept {
+		virtual object* clone() noexcept
+		{
 			return nullptr;
 		}
 		virtual bool equals(const object* ptr) const noexcept
@@ -148,6 +149,27 @@ namespace cov {
 	};
 	template < typename _Tp > struct add_reference<_Tp*> {
 		typedef _Tp* type;
+	};
+	template < typename _Tp > struct add_constant_reference {
+		typedef const _Tp& type;
+	};
+	template < typename _Tp > struct add_constant_reference<_Tp&> {
+		typedef const _Tp& type;
+	};
+	template < typename _Tp > struct add_constant_reference<const _Tp&> {
+		typedef const _Tp& type;
+	};
+	template < typename _Tp > struct add_constant_reference<_Tp&&> {
+		typedef const _Tp&& type;
+	};
+	template < typename _Tp > struct add_constant_reference<const _Tp&&> {
+		typedef const _Tp&& type;
+	};
+	template < typename _Tp > struct add_constant_reference<_Tp*> {
+		typedef _Tp* type;
+	};
+	template < typename _Tp > struct add_constant_reference<const _Tp*> {
+		typedef const _Tp* type;
 	};
 	template < typename _Tp > class is_functional {
 		template < typename T,decltype(&T::operator()) X >struct matcher;
@@ -321,12 +343,14 @@ namespace cov {
 		{
 			return mFunc!=nullptr;
 		}
-		void swap(function& func) noexcept {
+		void swap(function& func) noexcept
+		{
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
 		}
-		void swap(function&& func) noexcept {
+		void swap(function&& func) noexcept
+		{
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
@@ -344,7 +368,8 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func) noexcept {
+		function(function&& func) noexcept
+		{
 			swap(std::forward<function>(func));
 		}
 		~function()
@@ -463,7 +488,8 @@ namespace cov {
 		baseHolder * mDat=nullptr;
 	public:
 		static any infer_value(const std::string&);
-		void swap(any& obj) noexcept {
+		void swap(any& obj) noexcept
+		{
 			baseHolder* tmp=this->mDat;
 			this->mDat=obj.mDat;
 			obj.mDat=tmp;
@@ -481,7 +507,8 @@ namespace cov {
 		any()=default;
 		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
 		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
-		any(any&& v) noexcept {
+		any(any&& v) noexcept
+		{
 			swap(std::forward<any>(v));
 		}
 		~any()
@@ -506,7 +533,8 @@ namespace cov {
 			}
 			return *this;
 		}
-		any & operator=(any&& var) noexcept {
+		any & operator=(any&& var) noexcept
+		{
 			if(&var!=this)
 				swap(std::forward<any>(var));
 			return *this;
@@ -629,200 +657,151 @@ std::ostream& operator<<(std::ostream& out,const cov::any& val)
 // Covariant Tuple
 
 namespace cov {
-	template < typename _fT, typename _sT > struct tuple_node {
-		_fT current;
-		_sT forward;
-	};
-	struct final_tuple_node {};
-	template < typename ... Args > struct tuple_wrapper;
-	template < typename _Tp > struct tuple_wrapper <_Tp > {
-		typedef tuple_node<_Tp,final_tuple_node> type;
-	};
-	template < typename _Tp, typename ... Args > struct tuple_wrapper<_Tp, Args ... > {
-		typedef tuple_node < _Tp, typename tuple_wrapper < Args ... >::type > type;
-	};
-	template<typename _Arg,typename _Tp,typename _Node>
-	struct type_iterator {
-		typedef _Arg type;
-		typedef tuple_node<_Tp,_Node> node_type;
-		static type& get(node_type &var)
+	template<typename,typename...> struct tuple_type_iterator;
+	template<int,typename...> struct tuple_random_iterator;
+	template<typename...> class tuple;
+
+	template<typename _Arg,typename _Tp> struct tuple_type_iterator<_Arg,_Tp> {
+		static typename cov::add_reference<_Arg>::type get(tuple<_Tp>& t)
 		{
-			static_assert(is_same_type<_Arg,_Tp>::value,"E000B");
+			static_assert(cov::is_same_type<_Arg,_Tp>::value,"E000B");
 		}
-		static const type & get(const node_type&var)
+		static typename cov::add_constant_reference<_Arg>::type get(const tuple<_Tp>& t)
 		{
-			static_assert(is_same_type<_Arg,_Tp>::value,"E000B");
-		}
-		static void set(const type&,node_type&)
-		{
-			static_assert(is_same_type<_Arg,_Tp>::value,"E000B");
+			static_assert(cov::is_same_type<_Arg,_Tp>::value,"E000B");
 		}
 	};
-	template<typename _Tp,typename _Node>
-	struct type_iterator<_Tp,_Tp,_Node> {
+	template<typename _Tp> struct tuple_type_iterator<_Tp,_Tp> {
+		static typename cov::add_reference<_Tp>::type get(tuple<_Tp>& t)
+		{
+			return t.get_current();
+		}
+		static typename cov::add_constant_reference<_Tp>::type get(const tuple<_Tp>& t)
+		{
+			return t.get_current();
+		}
+	};
+	template<typename _Arg,typename _Tp,typename..._ArgsT> struct tuple_type_iterator<_Arg,_Tp,_ArgsT...> {
+		static typename cov::add_reference<_Arg>::type get(tuple<_Tp,_ArgsT...>& t)
+		{
+			return tuple_type_iterator<_Arg,_ArgsT...>::get(t.get_forward());
+		}
+		static typename cov::add_constant_reference<_Arg>::type get(const tuple<_Tp,_ArgsT...>& t)
+		{
+			return tuple_type_iterator<_Arg,_ArgsT...>::get(t.get_forward());
+		}
+	};
+	template<typename _Tp,typename..._ArgsT> struct tuple_type_iterator<_Tp,_Tp,_ArgsT...> {
+		static typename cov::add_reference<_Tp>::type get(tuple<_Tp,_ArgsT...>& t)
+		{
+			return t.get_current();
+		}
+		static typename cov::add_constant_reference<_Tp>::type get(const tuple<_Tp,_ArgsT...>& t)
+		{
+			return t.get_current();
+		}
+	};
+
+	template<typename _Tp,typename..._ArgsT> struct tuple_random_iterator<0,_Tp,_ArgsT...> {
 		typedef _Tp type;
-		typedef tuple_node<_Tp,_Node> node_type;
-		static _Tp& get(node_type &var)
+		static typename cov::add_reference<type>::type get(tuple<_Tp,_ArgsT...>& t)
 		{
-			return var.current;
+			return t.get_current();
 		}
-		static const _Tp& get(const node_type &var)
+		static typename cov::add_constant_reference<type>::type get(const tuple<_Tp,_ArgsT...>& t)
 		{
-			return var.current;
-		}
-		static void set(const type& _dat,node_type& _t)
-		{
-			_t.current=_dat;
+			return t.get_current();
 		}
 	};
-	template<typename _Tp,typename _fT,typename _sT>
-	struct type_iterator<_Tp,_Tp,tuple_node<_fT,_sT>> {
-		typedef _Tp type;
-		typedef tuple_node<_Tp,tuple_node<_fT,_sT>> node_type;
-		static type& get(node_type &var)
+	template<int N,typename _Tp,typename..._ArgsT> struct tuple_random_iterator<N,_Tp,_ArgsT...> {
+		typedef typename tuple_random_iterator<N-1,_ArgsT...>::type type;
+		static typename cov::add_reference<type>::type get(tuple<_Tp,_ArgsT...>& t)
 		{
-			return var.current;
+			return tuple_random_iterator<N-1,_ArgsT...>::get(t.get_forward());
 		}
-		static const type& get(const node_type &var)
+		static typename cov::add_constant_reference<type>::type get(const tuple<_Tp,_ArgsT...>& t)
 		{
-			return var.current;
-		}
-		static void set(const type& _dat,node_type& _t)
-		{
-			_t.current=_dat;
+			return tuple_random_iterator<N-1,_ArgsT...>::get(t.get_forward());
 		}
 	};
-	template<typename _Arg,typename _Tp,typename _fT,typename _sT>
-	struct type_iterator<_Arg,_Tp,tuple_node<_fT,_sT>> {
-		typedef _Arg type;
-		typedef tuple_node<_Tp,tuple_node<_fT,_sT>> node_type;
-		static type& get(node_type &var)
-		{
-			return type_iterator<_Arg,_fT,_sT>::get(var.forward);
-		}
-		static const type& get(const node_type &var)
-		{
-			return type_iterator<_Arg,_fT,_sT>::get(var.forward);
-		}
-		static void set(const type & _dat, node_type & _t)
-		{
-			type_iterator<_Arg,_fT,_sT>::set(_dat, _t.forward);
-		}
-	};
-	template < int N, typename _Tp > struct tuple_element;
-	template < typename _cT, typename _fT > struct tuple_element <0, tuple_node < _cT, _fT >> {
-		typedef _cT type;
-		typedef tuple_node < _cT, _fT > node_type;
-		static type & get(node_type & _t)
-		{
-			return _t.current;
-		}
-		static const type & get(const node_type & _t)
-		{
-			return _t.current;
-		}
-		static void set(const type & _dat, node_type & _t)
-		{
-			_t.current = _dat;
-		}
-	};
-	template < typename _cT, typename _fT, typename _sT >
-	struct tuple_element <0, tuple_node < _cT, tuple_node < _fT, _sT >>> {
-		typedef _cT type;
-		typedef tuple_node < _cT, tuple_node < _fT, _sT >> node_type;
-		static type & get(node_type & _t)
-		{
-			return _t.current;
-		}
-		static const type & get(const node_type & _t)
-		{
-			return _t.current;
-		}
-		static void set(const type & _dat, node_type & _t)
-		{
-			_t.current = _dat;
-		}
-	};
-	template < int N, typename _cT, typename _fT, typename _sT >
-	struct tuple_element <N, tuple_node < _cT, tuple_node < _fT, _sT >>> {
-		typedef typename tuple_element < N - 1, tuple_node < _fT, _sT >>::type type;
-		typedef tuple_node < _cT, tuple_node < _fT, _sT >> node_type;
-		static type & get(node_type & _t)
-		{
-			return tuple_element < N - 1, tuple_node < _fT, _sT >>::get(_t.forward);
-		}
-		static const type & get(const node_type & _t)
-		{
-			return tuple_element < N - 1, tuple_node < _fT, _sT >>::get(_t.forward);
-		}
-		static void set(const type & _dat, node_type & _t)
-		{
-			tuple_element < N - 1, tuple_node < _fT, _sT >>::set(_dat, _t.forward);
-		}
-	};
-	void fill_tuple(const final_tuple_node & _t)
-	{
-	}
-	template <typename T, typename...Elements >
-	void fill_tuple(typename tuple_wrapper<T, Elements...>::type & _t, const T& dat,const Elements&... args)
-	{
-		_t.current = dat;
-		fill_tuple(_t.forward, args...);
-	}
-	template<typename T,typename _fT,typename _sT>
-	T& get(tuple_node<_fT,_sT>&var)
-	{
-		return type_iterator<T,_fT,_sT>::get(var);
-	}
-	template < int N, typename _fT, typename _sT >
-	typename tuple_element < N, tuple_node < _fT, _sT >>::type &get(tuple_node < _fT, _sT > &_t)
-	{
-		return tuple_element < N, tuple_node < _fT, _sT >>::get(_t);
-	}
-	template<typename T,typename _fT,typename _sT>
-	const T& get(const tuple_node<_fT,_sT>&var)
-	{
-		return type_iterator<T,_fT,_sT>::get(var);
-	}
-	template < int N, typename _fT, typename _sT >
-	const typename tuple_element < N, tuple_node < _fT, _sT >>::type &get(const tuple_node < _fT, _sT > &_t)
-	{
-		return tuple_element < N, tuple_node < _fT, _sT >>::get(_t);
-	}
-	template<typename...Elements>
-	class tuple final {
+	template<typename _Tp> class tuple<_Tp> {
 	protected:
-		typename tuple_wrapper<Elements...>::type mTuple;
+		_Tp mCurrent;
 	public:
-		typedef typename tuple_wrapper<Elements...>::type tuple_type;
 		tuple()=default;
-		tuple(const tuple&)=default;
-		tuple(tuple&&)=default;
+		tuple(typename cov::add_constant_reference<_Tp>::type val):mCurrent(val) {}
 		~tuple()=default;
-		tuple(const Elements&...args)
+		_Tp& get_current()
 		{
-			cov::fill_tuple(mTuple,args...);
+			return mCurrent;
 		}
-		template<typename T>T& get()
+		const _Tp& get_current() const
 		{
-			return cov::get<T>(this->mTuple);
+			return mCurrent;
 		}
-		template<typename T> const T& get() const
+		template<int N> typename cov::add_reference<typename tuple_random_iterator<N,_Tp>::type>::type get()
 		{
-			return cov::get<T>(this->mTuple);
+			return tuple_random_iterator<N,_Tp>::get(*this);
 		}
-		template<int N> typename tuple_element < N, tuple_type>::type& get()
+		template<int N> typename cov::add_constant_reference<typename tuple_random_iterator<N,_Tp>::type>::type get() const
 		{
-			return cov::get<N>(this->mTuple);
+			return tuple_random_iterator<N,_Tp>::get(*this);
 		}
-		template<int N> const typename tuple_element < N, tuple_type>::type& get() const
+		template<typename _Arg> typename cov::add_reference<_Arg>::type get()
 		{
-			return cov::get<N>(this->mTuple);
+			return tuple_type_iterator<_Arg,_Tp>::get(*this);
+		}
+		template<typename _Arg> typename cov::add_constant_reference<_Arg>::type get() const
+		{
+			return tuple_type_iterator<_Arg,_Tp>::get(*this);
 		}
 	};
-	template<typename...Elements>tuple<Elements...> make_tuple(const Elements&...args)
+	template<typename _Tp,typename..._ArgsT>
+	class tuple<_Tp,_ArgsT...> {
+	protected:
+		_Tp mCurrent;
+		tuple<_ArgsT...> mForward;
+	public:
+		tuple()=default;
+		tuple(typename cov::add_constant_reference<_Tp>::type val,typename cov::add_constant_reference<_ArgsT>::type...args)
+			:mCurrent(val),mForward(args...) {}
+		~tuple()=default;
+		_Tp& get_current()
+		{
+			return mCurrent;
+		}
+		const _Tp& get_current() const
+		{
+			return mCurrent;
+		}
+		tuple<_ArgsT...>& get_forward()
+		{
+			return mForward;
+		}
+		const tuple<_ArgsT...>& get_forward() const
+		{
+			return mForward;
+		}
+		template<int N> typename cov::add_reference<typename tuple_random_iterator<N,_Tp,_ArgsT...>::type>::type get()
+		{
+			return tuple_random_iterator<N,_Tp,_ArgsT...>::get(*this);
+		}
+		template<int N> typename cov::add_constant_reference<typename tuple_random_iterator<N,_Tp,_ArgsT...>::type>::type get() const
+		{
+			return tuple_random_iterator<N,_Tp,_ArgsT...>::get(*this);
+		}
+		template<typename _Arg> typename cov::add_reference<_Arg>::type get()
+		{
+			return tuple_type_iterator<_Arg,_Tp,_ArgsT...>::get(*this);
+		}
+		template<typename _Arg> typename cov::add_constant_reference<_Arg>::type get() const
+		{
+			return tuple_type_iterator<_Arg,_Tp,_ArgsT...>::get(*this);
+		}
+	};
+	template<typename..._ArgsT> tuple<_ArgsT...> make_tuple(typename cov::add_constant_reference<_ArgsT>::type...args)
 	{
-		return std::move(tuple<Elements...>(args...));
+		return tuple<_ArgsT...>(std::forward<_ArgsT>(args)...);
 	}
 }
 
@@ -833,7 +812,7 @@ class cov::timer final {
 public:
 	typedef unsigned long timer_t;
 	enum class time_unit {
-	    nano_sec, micro_sec, milli_sec, second, minute
+		nano_sec, micro_sec, milli_sec, second, minute
 	};
 	static void reset()
 	{
@@ -918,7 +897,7 @@ namespace cov {
 				}
 			}
 			if(!exsist)
-				mCases.push_back({head,body});
+				mCases.push_back(tuple<cov::any,cov::function<void()>>(head,body));
 		}
 		void add_default(const case_type& body)
 		{
@@ -1019,7 +998,8 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs( {
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
+	{
 		args...
 	})
 	{
