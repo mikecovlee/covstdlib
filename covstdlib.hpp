@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.16
+* Library Version: 2.16.17
 *
 * Function List:
 * Covariant Functional(New)
@@ -29,6 +29,7 @@
 * cov::timer
 * cov::switcher(New)
 * cov::argument_list
+* cov::shared_ptr(New)
 *
 * Marco List:
 * Library Version: __covcpplib
@@ -41,12 +42,13 @@
 #error E0002
 #endif
 
-#define __covcpplib 201616L
+#define __covcpplib 201617L
 
 #include <map>
 #include <deque>
 #include <string>
 #include <thread>
+#include <atomic>
 #include <chrono>
 #include <utility>
 #include <typeinfo>
@@ -59,8 +61,8 @@ namespace cov {
 		std::string mWhat="Covstdlib Warning";
 	public:
 		warning()=default;
-		warning(const std::string& str) noexcept:
-			mWhat("Covstdlib Warning:"+str) {}
+	warning(const std::string& str) noexcept:
+		mWhat("Covstdlib Warning:"+str) {}
 		warning(const warning&)=default;
 		warning(warning&&)=default;
 		virtual ~warning()=default;
@@ -73,8 +75,8 @@ namespace cov {
 		std::string mWhat="Covstdlib Error";
 	public:
 		error()=default;
-		error(const std::string& str) noexcept:
-			mWhat("Covstdlib Error:"+str) {}
+	error(const std::string& str) noexcept:
+		mWhat("Covstdlib Error:"+str) {}
 		error(const error&)=default;
 		error(error&&)=default;
 		virtual ~error()=default;
@@ -100,8 +102,7 @@ namespace cov {
 		{
 			return typeid(*this).name();
 		}
-		virtual object* clone() noexcept
-		{
+		virtual object* clone() noexcept {
 			return nullptr;
 		}
 		virtual bool equals(const object* ptr) const noexcept
@@ -343,14 +344,12 @@ namespace cov {
 		{
 			return mFunc!=nullptr;
 		}
-		void swap(function& func) noexcept
-		{
+		void swap(function& func) noexcept {
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
 		}
-		void swap(function&& func) noexcept
-		{
+		void swap(function&& func) noexcept {
 			function_base<_rT(*)(ArgsT...)>* tmp=mFunc;
 			mFunc=func.mFunc;
 			func.mFunc=tmp;
@@ -368,8 +367,7 @@ namespace cov {
 			else
 				mFunc=func.mFunc->copy();
 		}
-		function(function&& func) noexcept
-		{
+		function(function&& func) noexcept {
 			swap(std::forward<function>(func));
 		}
 		~function()
@@ -488,8 +486,7 @@ namespace cov {
 		baseHolder * mDat=nullptr;
 	public:
 		static any infer_value(const std::string&);
-		void swap(any& obj) noexcept
-		{
+		void swap(any& obj) noexcept {
 			baseHolder* tmp=this->mDat;
 			this->mDat=obj.mDat;
 			obj.mDat=tmp;
@@ -507,8 +504,7 @@ namespace cov {
 		any()=default;
 		template < typename T > any(const T & dat):mDat(new holder < T > (dat)) {}
 		any(const any & v):mDat(v.usable()?v.mDat->duplicate():nullptr) {}
-		any(any&& v) noexcept
-		{
+		any(any&& v) noexcept {
 			swap(std::forward<any>(v));
 		}
 		~any()
@@ -533,8 +529,7 @@ namespace cov {
 			}
 			return *this;
 		}
-		any & operator=(any&& var) noexcept
-		{
+		any & operator=(any&& var) noexcept {
 			if(&var!=this)
 				swap(std::forward<any>(var));
 			return *this;
@@ -812,7 +807,7 @@ class cov::timer final {
 public:
 	typedef unsigned long timer_t;
 	enum class time_unit {
-		nano_sec, micro_sec, milli_sec, second, minute
+	    nano_sec, micro_sec, milli_sec, second, minute
 	};
 	static void reset()
 	{
@@ -998,8 +993,7 @@ public:
 	typedef std::deque<cov::any>::iterator iterator;
 	typedef std::deque<cov::any>::const_iterator const_iterator;
 	argument_list()=delete;
-	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs(
-	{
+	template<typename...ArgTypes>argument_list(ArgTypes&&...args):mArgs( {
 		args...
 	})
 	{
@@ -1078,6 +1072,108 @@ public:
 			throw cov::error("E0009.Expected "+std::to_string(count_types<ArgTypes...>()));
 	}
 };
+
+// Covariant Memory
+
+namespace cov {
+	template<typename _Tp,template<typename>typename _Alloc>
+	struct _alloc_helper {
+		static _Alloc<_Tp> allocator;
+	};
+	template<typename _Tp,template<typename>typename _Alloc>
+	_Alloc<_Tp> _alloc_helper<_Tp,_Alloc>::allocator;
+	template<typename _Tp,
+	         template<typename>typename _Alloc=std::allocator,
+	         typename _Mutex=std::mutex,
+	         template<typename>typename _Atomic=std::atomic>
+	class shared_ptr final {
+	public:
+		typedef _Mutex mutex;
+		typedef _Atomic<unsigned long> counter;
+		typedef _Tp data_type;
+		typedef _Tp* raw_type;
+		typedef cov::function<void(raw_type)> deleter;
+	private:
+		class proxy final {
+			friend class shared_ptr<_Tp,_Alloc,_Mutex,_Atomic>;
+			mutable counter ref_count;
+			mutable mutex guard;
+			deleter resolve;
+			raw_type data=nullptr;
+			void add_ref() const
+			{
+				++ref_count;
+			}
+			void cut_ref() const
+			{
+				--ref_count;
+				if(ref_count==0) {
+					guard.lock();
+					if(resolve.callable())
+						resolve(data);
+					_alloc_helper<data_type,_Alloc>::allocator.destroy(data);
+					_alloc_helper<data_type,_Alloc>::allocator.deallocate(data,1);
+					guard.unlock();
+				}
+			}
+		};
+		proxy* mProxy;
+	public:
+		shared_ptr():mProxy(_alloc_helper<proxy,_Alloc>::allocator.allocate(1))
+		{
+			mProxy->ref_count=1;
+			mProxy->data=_alloc_helper<data_type,_Alloc>::allocator.allocate(1);
+			_alloc_helper<data_type,_Alloc>::allocator.construct(mProxy->data);
+		}
+		shared_ptr(const shared_ptr& ptr):mProxy(ptr.mProxy)
+		{
+			mProxy->add_ref();
+		}
+		shared_ptr(const data_type& obj):mProxy(_alloc_helper<proxy,_Alloc>::allocator.allocate(1))
+		{
+			mProxy->ref_count=1;
+			mProxy->data=_alloc_helper<_Tp,_Alloc>::allocator.allocate(1);
+			_alloc_helper<data_type,_Alloc>::allocator.construct(mProxy->data,obj);
+		}
+		~shared_ptr()
+		{
+			mProxy->cut_ref();
+			if(mProxy->ref_count==0) {
+				_alloc_helper<proxy,_Alloc>::allocator.destroy(mProxy);
+				_alloc_helper<proxy,_Alloc>::allocator.deallocate(mProxy,1);
+			}
+		}
+		shared_ptr& operator=(const shared_ptr& ptr)
+		{
+			if(&ptr!=this) {
+				mProxy->cut_ref();
+				if(mProxy->ref_count==0) {
+					_alloc_helper<proxy,_Alloc>::allocator.destroy(mProxy);
+					_alloc_helper<proxy,_Alloc>::allocator.deallocate(mProxy,1);
+				}
+				mProxy=ptr.mProxy;
+				++mProxy->ref_count;
+			}
+			return *this;
+		}
+		data_type& operator*()
+		{
+			return *mProxy->data;
+		}
+		raw_type operator->()
+		{
+			return mProxy->data;
+		}
+		const data_type& operator*() const
+		{
+			return *mProxy->data;
+		}
+		const raw_type operator->() const
+		{
+			return mProxy->data;
+		}
+	};
+}
 
 #define Switch(obj) cov::cov_switchers.push(obj);
 #define EndSwitch cov::cov_switchers.top().perform();cov::cov_switchers.pop();
