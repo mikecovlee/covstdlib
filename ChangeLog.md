@@ -1,0 +1,9 @@
+###更新日志:
+[201617]实现shared_ptr(引用计数智能指针)，线程安全，支持指定Mutex,Atomic和Allocator，暂时不支持移动语义和指定删除器。  
+[201616]重写Tuple(元组)，在主类中直接使用模板元递归解包。为Tuple和Function的参数增加add_reference包装以兼容原生指针。  
+[201615]解决不能输出错误信息的问题，移除covstdlib类，解除对main函数的限制。  
+[201614]增加error和warning类，继承于std::exception类。为解决不能输出错误信息的问题增加特殊的main函数，位于covstdlib类中。  
+[201613]基于Any和Function重写Switcher并解决Any容纳std::type_info的问题。  
+[201612]重写Any，改善可靠性，支持移动语义。为Function增加对移动语义的支持。  
+[201611]移除MemberFunction并将成员函数的支持集成到Function中，改善稳定性。  
+[201610]基于函数分解器实现函数容器Function和成员函数容器MemberFunction。  
