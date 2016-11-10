@@ -1,4 +1,5 @@
 ###更新日志:
+[201618]移除shared_ptr的mutex，改进引用计数器以增加线程稳定性。
 [201617]实现shared_ptr(引用计数智能指针)，线程安全，支持指定Mutex,Atomic和Allocator，暂时不支持移动语义和指定删除器。  
 [201616]重写Tuple(元组)，在主类中直接使用模板元递归解包。为Tuple和Function的参数增加add_reference包装以兼容原生指针。  
 [201615]解决不能输出错误信息的问题，移除covstdlib类，解除对main函数的限制。  
