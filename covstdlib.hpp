@@ -20,7 +20,7 @@
 * Github: https://github.com/mikecovlee
 * Website: http://ldc.atd3.cn
 *
-* Library Version: 2.16.17
+* Library Version: 2.16.18
 *
 * Function List:
 * Covariant Functional(New)
@@ -42,7 +42,7 @@
 #error E0002
 #endif
 
-#define __covcpplib 201617L
+#define __covcpplib 201618L
 
 #include <map>
 #include <deque>
@@ -1084,20 +1084,17 @@ namespace cov {
 	_Alloc<_Tp> _alloc_helper<_Tp,_Alloc>::allocator;
 	template<typename _Tp,
 	         template<typename>typename _Alloc=std::allocator,
-	         typename _Mutex=std::mutex,
 	         template<typename>typename _Atomic=std::atomic>
 	class shared_ptr final {
 	public:
-		typedef _Mutex mutex;
 		typedef _Atomic<unsigned long> counter;
 		typedef _Tp data_type;
 		typedef _Tp* raw_type;
 		typedef cov::function<void(raw_type)> deleter;
 	private:
 		class proxy final {
-			friend class shared_ptr<_Tp,_Alloc,_Mutex,_Atomic>;
+			friend class shared_ptr<_Tp,_Alloc,_Atomic>;
 			mutable counter ref_count;
-			mutable mutex guard;
 			deleter resolve;
 			raw_type data=nullptr;
 			void add_ref() const
@@ -1106,14 +1103,11 @@ namespace cov {
 			}
 			void cut_ref() const
 			{
-				--ref_count;
-				if(ref_count==0) {
-					guard.lock();
+				if(--ref_count==0) {
 					if(resolve.callable())
 						resolve(data);
 					_alloc_helper<data_type,_Alloc>::allocator.destroy(data);
 					_alloc_helper<data_type,_Alloc>::allocator.deallocate(data,1);
-					guard.unlock();
 				}
 			}
 		};
