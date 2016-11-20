@@ -47,12 +47,12 @@
 #include <map>
 #include <deque>
 #include <string>
+#include <iosfwd>
 #include <thread>
 #include <atomic>
 #include <chrono>
 #include <utility>
 #include <typeinfo>
-#include <iostream>
 #include <exception>
 #include <typeindex>
 
