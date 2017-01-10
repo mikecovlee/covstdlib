@@ -56,41 +56,49 @@ namespace cov {
 	template<typename fT,typename sT,typename Arg>struct change_type<0,tlist_node<fT,sT>,Arg> {
 		using result=tlist_node<Arg,sT>;
 	};
-    template<typename T,typename Arg>struct push_front{
-        using result=tlist_node<Arg,T>;
-    };
-    template<typename T>struct pop_front{
-        //using result=void;
-    };
-    template<typename fT,typename sT>struct pop_front<tlist_node<fT,sT>>{
-        using result=sT;
-    };
-	template<typename T,typename Arg>struct push_back{
-		//using result=void;	
+	template<typename T,typename Arg>struct push_front {
+		using result=tlist_node<Arg,T>;
 	};
-	template<typename fT,typename sT,typename Arg>struct push_back<tlist_node<fT,sT>,Arg>{
-		using result=tlist_node<fT,tlist_node<sT,Arg>>;
-	};
-	template<typename fT,typename sT,typename tT,typename Arg>struct push_back<tlist_node<fT,tlist_node<sT,tT>>,Arg>{
-		using result=tlist_node<fT,typename push_back<tlist_node<sT,tT>,Arg>::result>;
-	};
-	template<typename T>struct pop_back{
+	template<typename T>struct pop_front {
 		//using result=void;
 	};
-	template<typename fT,typename sT>struct pop_back<tlist_node<fT,sT>>{
-		using result=fT;
-	};
-	template<typename fT,typename sT,typename tT>struct pop_back<tlist_node<fT,tlist_node<sT,tT>>>{
-		using result=tlist_node<fT,typename pop_back<tlist_node<sT,tT>>::result>;
-	};
-	template<int posit,typename T>struct erase{
-		//using result=void;
-	};
-	template<int posit,typename fT,typename sT>struct erase<posit,tlist_node<fT,sT>>{
-		using result=tlist_node<fT,typename erase<posit-1,sT>::result>;
-	};
-	template<typename fT,typename sT>struct erase<0,tlist_node<fT,sT>>{
+	template<typename fT,typename sT>struct pop_front<tlist_node<fT,sT>> {
 		using result=sT;
 	};
-	template<int posit,typename T,typename Arg>
+	template<typename T,typename Arg>struct push_back {
+		//using result=void;
+	};
+	template<typename fT,typename sT,typename Arg>struct push_back<tlist_node<fT,sT>,Arg> {
+		using result=tlist_node<fT,tlist_node<sT,Arg>>;
+	};
+	template<typename fT,typename sT,typename tT,typename Arg>struct push_back<tlist_node<fT,tlist_node<sT,tT>>,Arg> {
+		using result=tlist_node<fT,typename push_back<tlist_node<sT,tT>,Arg>::result>;
+	};
+	template<typename T>struct pop_back {
+		//using result=void;
+	};
+	template<typename fT,typename sT>struct pop_back<tlist_node<fT,sT>> {
+		using result=fT;
+	};
+	template<typename fT,typename sT,typename tT>struct pop_back<tlist_node<fT,tlist_node<sT,tT>>> {
+		using result=tlist_node<fT,typename pop_back<tlist_node<sT,tT>>::result>;
+	};
+	template<int posit,typename T>struct erase {
+		//using result=void;
+	};
+	template<int posit,typename fT,typename sT>struct erase<posit,tlist_node<fT,sT>> {
+		using result=tlist_node<fT,typename erase<posit-1,sT>::result>;
+	};
+	template<typename fT,typename sT>struct erase<0,tlist_node<fT,sT>> {
+		using result=sT;
+	};
+	template<int posit,typename T,typename Arg>struct insert {
+		//using result=void;
+	};
+	template<int posit,typename fT,typename sT,typename Arg>struct insert<posit,tlist_node<fT,sT>,Arg> {
+		using result=tlist_node<fT,typename insert<posit-1,sT,Arg>::result>;
+	};
+	template<typename fT,typename sT,typename Arg>struct insert<0,tlist_node<fT,sT>,Arg> {
+		using result=tlist_node<fT,tlist_node<Arg,sT>>;
+	};
 }
