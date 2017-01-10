@@ -2,10 +2,7 @@
 #include <cstdio>
 #include <typeinfo>
 namespace cov {
-	template<typename fT,typename sT>struct tlist_node {
-		using first=fT;
-		using second=sT;
-	};
+	template<typename fT,typename sT>struct tlist_node {};
 	template<typename...>struct make_tlist;
 	template<typename fT,typename sT>struct make_tlist<fT,sT> {
 		using result=tlist_node<fT,sT>;
