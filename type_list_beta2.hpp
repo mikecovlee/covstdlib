@@ -78,4 +78,29 @@ namespace cov {
 	template<typename fT,typename sT,typename Arg>struct insert<0,tlist_node<fT,sT>,Arg> {
 		using result=tlist_node<fT,tlist_node<Arg,sT>>;
 	};
+	template<bool factor,typename Tx,typename Ty>struct replace_if;
+	template<typename Tx,typename Ty>struct replace_if<true,Tx,Ty>{
+		using result=Ty;
+	};
+	template<typename Tx,typename Ty>struct replace_if<false,Tx,Ty>{
+		using result=Tx;
+	};
+	template<typename T,template<typename>class Helper>struct remove_if;
+	template<typename fT,typename sT,template<typename>class Helper>struct remove_if<tlist_node<fT,sT>,Helper>{
+		using result=typename replace_if<Helper<fT>::value,tlist_node<fT,typename remove_if<sT,Helper>::result>,typename remove_if<sT,Helper>::result>::result;
+	};
+	template<template<typename>class Helper>struct remove_if<tlist_final,Helper>{
+		using result=tlist_final;
+	};
+	template < typename T, typename X > struct is_same_type {
+		static constexpr bool value=false;
+	};
+	template < typename T > struct is_same_type<T,T> {
+		static constexpr bool value=true;
+	};
+	template<typename T,typename Arg>class remove{
+		template<typename X>using Helper=is_same_type<Arg,X>;
+	public:
+		using result=typename remove_if<T,Helper>::result;
+	};
 }
