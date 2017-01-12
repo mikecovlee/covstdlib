@@ -15,5 +15,9 @@ int main()
 	printf("C:size=%d\t",cov::get_size<C>::result);
 	cov::iterator<C>::show();
 	printf("\n");
+	using D=typename cov::push_back<C,void>::result;
+	printf("D:size=%d\t",cov::get_size<D>::result);
+	cov::iterator<D>::show();
+	printf("\n");
 	return 0;
 }
