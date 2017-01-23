@@ -8,6 +8,7 @@ Covariant C++ Library(2nd Generation) Guide
 *You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.*  
   
 **Copyright (C) 2016 Michael Lee(李登淳)**  
+**Covariant Studio将不再维护Covstdlib，将工作重点转移至Mozart。**  
   
 Email: China-LDC@outlook.com  
 Github: https://github.com/mikecovlee  
